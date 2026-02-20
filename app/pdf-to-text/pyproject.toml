@@ -1,0 +1,11 @@
+[project]
+name = "data-cleanup"
+version = "0.1.0"
+description = "Read a PDF from S3, extract it to text format and put it in S3"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.42.53",
+    "pymupdf-layout>=1.27.1",
+    "pymupdf4llm>=0.3.4",
+]

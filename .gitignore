@@ -1,6 +1,6 @@
 .DS_Store
 
-.devbox
+.venv
 
 modules/**/*.terraform.lock.hcl
 
