@@ -1,5 +1,5 @@
 [project]
-name = "data-cleanup"
+name = "pdf-to-text"
 version = "0.1.0"
 description = "Read a PDF from S3, extract it to text format and put it in S3"
 readme = "README.md"
