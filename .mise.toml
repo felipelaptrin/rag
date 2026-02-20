@@ -28,5 +28,5 @@ description = "Install pre-commit"
 run = 'pre-commit install'
 
 [tasks.pre-commit]
-description = "Install pre-commit"
+description = "Run pre-commit"
 run = 'pre-commit run -a'
