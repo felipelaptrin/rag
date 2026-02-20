@@ -13,9 +13,11 @@ misconfigurations:
     statement: Image scanning is not enabled
     paths:
       - modules/lambda/main.tf
+      - ../modules/lambda/main.tf
       - main.tf
   - id: AVD-AWS-0031
     statement: Repository tags are mutable.
     paths:
       - modules/lambda/main.tf
+      - ../modules/lambda/main.tf
       - main.tf

@@ -103,3 +103,29 @@ resource "aws_iam_role_policy" "eventbridge_to_sqs_policy" {
     ]
   })
 }
+
+########################
+### LAMBDA - Pdf-to-text
+########################
+module "pdf_to_text" {
+  source      = "../modules/lambda"
+  name        = "${local.project}-${var.environment}-pdf-to-text"
+  description = "Read a PDF from S3, extract it to text format and put it in S3"
+  json_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:Listbucket",
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.knowledge_base.arn,
+          "${aws_s3_bucket.knowledge_base.arn}/*"
+        ]
+      }
+    ]
+  })
+}
