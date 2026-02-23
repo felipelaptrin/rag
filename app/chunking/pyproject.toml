@@ -1,7 +1,7 @@
 [project]
 name = "chunking"
 version = "0.1.0"
-description = "Chunks a JSON input"
+description = "Downloads a JSON (Corpus) from S3 and store the chunkings in S3 bucket"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
