@@ -1,0 +1,103 @@
+{
+    "Comment": "Orchestate the RAG ingestion",
+    "QueryLanguage": "JSONata",
+    "StartAt": "Map",
+    "States": {
+        "Map": {
+            "Type": "Map",
+            "ItemProcessor": {
+                "ProcessorConfig": {
+                    "Mode": "INLINE"
+                },
+                "StartAt": "Extract Input S3 URI",
+                "States": {
+                    "Extract Input S3 URI": {
+                        "Type": "Pass",
+                        "Next": "PDF to Text",
+                        "Assign": {
+                            "input_s3_uri": "{% $parse($states.input.body) %}"
+                        }
+                    },
+                    "PDF to Text": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": "${PDF_TO_TEXT_LAMBDA_ARN}:$LATEST",
+                            "Payload": {
+                                "s3_uri": "{% $in %}"
+                            }
+                        },
+                        "Retry": [
+                            {
+                                "ErrorEquals": [
+                                    "Lambda.ServiceException",
+                                    "Lambda.AWSLambdaException",
+                                    "Lambda.SdkClientException",
+                                    "Lambda.TooManyRequestsException"
+                                ],
+                                "IntervalSeconds": 1,
+                                "MaxAttempts": 3,
+                                "BackoffRate": 2,
+                                "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "Next": "Chunking"
+                    },
+                    "Chunking": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": "${CHUNKING_LAMBDA_ARN}:$LATEST",
+                            "Payload": "{% $states.input %}"
+                        },
+                        "Retry": [
+                            {
+                                "ErrorEquals": [
+                                    "Lambda.ServiceException",
+                                    "Lambda.AWSLambdaException",
+                                    "Lambda.SdkClientException",
+                                    "Lambda.TooManyRequestsException"
+                                ],
+                                "IntervalSeconds": 1,
+                                "MaxAttempts": 3,
+                                "BackoffRate": 2,
+                                "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "Next": "Embedding"
+                    },
+                    "Embedding": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": "${EMBEDDING_LAMBDA_ARN}:$LATEST",
+                            "Payload": "{% $states.input %}"
+                        },
+                        "Retry": [
+                            {
+                                "ErrorEquals": [
+                                    "Lambda.ServiceException",
+                                    "Lambda.AWSLambdaException",
+                                    "Lambda.SdkClientException",
+                                    "Lambda.TooManyRequestsException"
+                                ],
+                                "IntervalSeconds": 1,
+                                "MaxAttempts": 3,
+                                "BackoffRate": 2,
+                                "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": true
+                    }
+                }
+            },
+            "Next": "Success"
+        },
+        "Success": {
+            "Type": "Succeed"
+        }
+    }
+}
