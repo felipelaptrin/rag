@@ -1,5 +1,7 @@
 .DS_Store
 
+qdrant_storage
+
 .env
 .venv
 
