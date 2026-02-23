@@ -9,13 +9,21 @@
                 "ProcessorConfig": {
                     "Mode": "INLINE"
                 },
-                "StartAt": "Extract Input S3 URI",
+                "StartAt": "Get S3 Inputs",
                 "States": {
-                    "Extract Input S3 URI": {
+                    "Get S3 Inputs": {
+                        "Type": "Pass",
+                        "Next": "Generate Initial S3 URI",
+                        "Output": {
+                            "s3_bucket": "{% $parse($states.input.body).detail.bucket.name %}",
+                            "input_s3_key": "{% $parse($states.input.body).detail.object.key %}"
+                        }
+                    },
+                    "Generate Initial S3 URI": {
                         "Type": "Pass",
                         "Next": "PDF to Text",
-                        "Assign": {
-                            "input_s3_uri": "{% $parse($states.input.body) %}"
+                        "Output": {
+                            "input_s3_uri": "{% 's3://' & $states.input.s3_bucket & '/' & $states.input.input_s3_key  %}"
                         }
                     },
                     "PDF to Text": {
@@ -25,7 +33,7 @@
                         "Arguments": {
                             "FunctionName": "${PDF_TO_TEXT_LAMBDA_ARN}:$LATEST",
                             "Payload": {
-                                "s3_uri": "{% $in %}"
+                                "s3_uri": "{% $states.input.input_s3_uri %}"
                             }
                         },
                         "Retry": [
@@ -50,7 +58,9 @@
                         "Output": "{% $states.result.Payload %}",
                         "Arguments": {
                             "FunctionName": "${CHUNKING_LAMBDA_ARN}:$LATEST",
-                            "Payload": "{% $states.input %}"
+                            "Payload": {
+                                "s3_uri": "{% $states.input.result.corpus_s3_uri %}"
+                            }
                         },
                         "Retry": [
                             {
@@ -74,7 +84,9 @@
                         "Output": "{% $states.result.Payload %}",
                         "Arguments": {
                             "FunctionName": "${EMBEDDING_LAMBDA_ARN}:$LATEST",
-                            "Payload": "{% $states.input %}"
+                            "Payload": {
+                                "s3_uri": "{% $states.input.result.chunks_s3_uri %}"
+                            }
                         },
                         "Retry": [
                             {
