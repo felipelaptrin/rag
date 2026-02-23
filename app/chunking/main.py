@@ -10,6 +10,7 @@ from langchain_text_splitters import (
     MarkdownTextSplitter,
     RecursiveCharacterTextSplitter,
 )
+from utils.env_vars import validate_required_env
 from utils.s3 import download_s3_object, upload_s3_object
 
 logging.basicConfig(
@@ -171,6 +172,15 @@ def process_corpus_from_s3(s3_uri: str) -> Dict[str, Any]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info(f"Input Event => {event}")
+    validate_required_env(
+        [
+            "KNOWLEDGE_BASE_BUCKET",
+            "CHUNK_SIZE",
+            "CHUNK_OVERLAP",
+            "MAX_EMBED_INPUT_CHARS",
+            "TOKEN_RATIO",
+        ]
+    )
     s3_uri = event.get("s3_uri")
     if not isinstance(s3_uri, str) or not s3_uri:
         raise ValueError("Expected event['s3_uri'] as a non-empty string")
