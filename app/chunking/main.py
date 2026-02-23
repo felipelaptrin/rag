@@ -162,8 +162,8 @@ def process_corpus_from_s3(s3_uri: str) -> Dict[str, Any]:
 
     return {
         "doc_id": doc_id,
-        "input_corpus_s3_uri": s3_uri,
-        "output_chunks_s3_uri": f"s3://{BUCKET}/{chunks_key}",
+        "corpus_s3_uri": s3_uri,
+        "chunks_s3_uri": f"s3://{BUCKET}/{chunks_key}",
         "chunk_count": len(chunk_records),
         "chunk_size": CHUNK_SIZE,
         "chunk_overlap": CHUNK_OVERLAP,

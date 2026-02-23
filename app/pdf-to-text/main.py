@@ -98,10 +98,13 @@ def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
     MD_PATH.write_text(md, encoding="utf-8")
 
     # Write single record to corpus.json (overwrite)
+    md_key = f"clean/{doc_id}/extract_text.md"
+    corpus_key = f"clean/{doc_id}/corpus.json"
     record = {
         "doc_id": doc_id,
         "title": title,
         "source_s3_uri": s3_uri,
+        "corpus_s3_uri": f"s3://{BUCKET}/{corpus_key}",
         "extracted_at_utc": extracted_at,
         "format": "markdown",
         "text": md,
@@ -110,8 +113,6 @@ def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
         json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
-    md_key = f"clean/{doc_id}/extract_text.md"
-    corpus_key = f"clean/{doc_id}/corpus.json"
     upload_s3_object(s3_client, BUCKET, md_key, file_path=MD_PATH)
     upload_s3_object(s3_client, BUCKET, corpus_key, file_path=CORPUS_PATH)
 
