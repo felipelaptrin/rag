@@ -1,24 +1,10 @@
-#!/usr/bin/env python3
-"""
-Lambda-friendly: S3 PDF -> /tmp corpus.jsonl (+ .md) using pymupdf4llm.
-
-What it does
-- Takes a single S3 URI like: s3://my-bucket/path/to/file.pdf
-- Downloads the PDF to /tmp
-- Converts PDF -> Markdown using pymupdf4llm
-- Writes (overwriting if they already exist):
-  - /tmp/<doc_id>_<title>.md
-  - /tmp/corpus.jsonl  (single JSON object, not JSONL append)
-
-Requires:
-  pip install -U boto3 pymupdf4llm pymupdf_layout
-"""
-
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
+import logging
+import mimetypes
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,11 +13,20 @@ from urllib.parse import unquote_plus
 
 import boto3
 import pymupdf4llm
+from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
+)
+
+logger = logging.getLogger(__name__)
+load_dotenv()
 
 TMP_DIR = Path("/tmp")
-CORPUS_PATH = (
-    TMP_DIR / "corpus.jsonl"
-)  # kept name for compatibility, but overwritten with 1 JSON record
+CORPUS_PATH = TMP_DIR / "corpus.json"
+MD_PATH = TMP_DIR / "extracted.md"
 
 
 def parse_s3_uri(s3_uri: str) -> Tuple[str, str]:
@@ -68,36 +63,67 @@ def sha256_file(path: Path) -> str:
 
 
 def download_s3_object(bucket: str, key: str, dest_path: Path) -> None:
+    logging.info("Downloading PDF from S3 bucket...")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
-    boto3.client("s3").download_file(bucket, key, str(dest_path))
+    try:
+        boto3.client("s3").download_file(bucket, key, str(dest_path))
+        logging.info("Downloaded PDF completed")
+    except Exception as error:
+        logging.error(f"Could not download PDF from S3 Bucket because of: {error}")
+
+
+def upload_s3_object(bucket: str, key: str, file_path: Path) -> None:
+    logging.info(
+        f"Uploading file '{file_path}' to S3 bucket '{bucket}' using key '{key}'..."
+    )
+    suffix = file_path.suffix.lower()
+    if suffix == ".json":
+        content_type = "application/json; charset=utf-8"
+    elif suffix in (".md", ".markdown"):
+        content_type = "text/markdown; charset=utf-8"
+    else:
+        # fallback based on filename
+        content_type, _ = mimetypes.guess_type(str(file_path))
+        content_type = content_type or "text/plain; charset=utf-8"
+
+    try:
+        boto3.client("s3").upload_file(
+            str(file_path),
+            bucket,
+            key,
+            ExtraArgs={
+                "ContentType": content_type,
+                "ContentDisposition": "inline",
+            },
+        )
+        logging.info("Upload completed")
+    except Exception as error:
+        logging.error(f"Could not upload file to S3 Bucket because of: {error}")
 
 
 def pdf_to_markdown(pdf_path: Path) -> str:
+    logging.info("Extracting PDF content to Markdown")
     md = pymupdf4llm.to_markdown(str(pdf_path), page_chunks=False)
+    logging.info("PDF content extracted to Markdown successfully")
     return normalize_md(md)
 
 
 def extract_s3_uri_from_event(event: Dict[str, Any]) -> str:
-    # 1) Direct invoke format
-    if isinstance(event.get("s3_uri"), str):
-        return event["s3_uri"]
-
-    # 2) S3 event notification format
-    records = event.get("Records")
-    if isinstance(records, list) and records:
-        r0 = records[0]
-        s3_info = r0.get("s3", {})
-        bucket = s3_info.get("bucket", {}).get("name")
-        key = s3_info.get("object", {}).get("key")
+    logging.info("Extracting S3 URI from lambda event")
+    if isinstance(event.get("detail"), dict):
+        bucket = event["detail"]["bucket"]["name"]
+        key = event["detail"]["object"]["key"]
         if bucket and key:
-            return f"s3://{bucket}/{unquote_plus(key)}"
+            s3_uri = f"s3://{bucket}/{unquote_plus(key)}"
+            logging.info(f"Extracted S3 URI from S3 Event format: {s3_uri}")
+            return s3_uri
 
     raise ValueError(
         "Could not determine s3_uri. Provide event['s3_uri'] or an S3 event payload."
     )
 
 
-def process_one_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
+def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
     bucket, key = parse_s3_uri(s3_uri)
     if not key.lower().endswith(".pdf"):
         raise ValueError(f"Object is not a PDF (key={key})")
@@ -115,10 +141,9 @@ def process_one_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
         raise RuntimeError("No text extracted. PDF may be scanned or protected.")
 
     # Write markdown file (overwrite)
-    md_path = TMP_DIR / (safe_name(f"{doc_id}_{title}") + ".md")
-    md_path.write_text(md, encoding="utf-8")
+    MD_PATH.write_text(md, encoding="utf-8")
 
-    # Write ONE record to corpus.jsonl (overwrite)
+    # Write single record to corpus.json (overwrite)
     record = {
         "doc_id": doc_id,
         "title": title,
@@ -131,30 +156,37 @@ def process_one_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
         json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
-    return {
-        "doc_id": doc_id,
-        "title": title,
-        "source_s3_uri": s3_uri,
-        "downloaded_pdf_path": str(local_pdf),
-        "md_path": str(md_path),
-        "corpus_jsonl_path": str(CORPUS_PATH),
-        "markdown_chars": len(md),
-    }
+    bucket = os.getenv("KNOWLEDGE_BASE_BUCKET")
+    md_key = f"clean/{doc_id}/extract_text.md"
+    corpus_key = f"clean/{doc_id}/corpus.json"
+    upload_s3_object(bucket, md_key, file_path=MD_PATH)
+    upload_s3_object(bucket, corpus_key, file_path=CORPUS_PATH)
+
+    return record
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    logger.info(f"Input Event => {event}")
     s3_uri = extract_s3_uri_from_event(event)
-    result = process_one_pdf_from_s3(s3_uri)
+    result = process_pdf_from_s3(s3_uri)
     return {"ok": True, "result": result}
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--s3-uri", required=True, help="Example: s3://bucket/key.pdf")
-    args = ap.parse_args()
-    res = process_one_pdf_from_s3(args.s3_uri)
-    print(json.dumps(res, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+if os.getenv("ENV", "").upper() == "DEVELOPMENT":
+    s3_event = {  # I removed some fields from the original event
+        "version": "0",
+        "detail-type": "Object Created",
+        "resources": ["arn:aws:s3:::knowledge-base-dev-937168356724"],
+        "detail": {
+            "version": "0",
+            "bucket": {"name": "knowledge-base-dev-937168356724"},
+            "object": {
+                "key": "raw/Buying-as-a-guest.pdf",
+                "etag": "2a04043c8b96e5ef8abf45b80e208a03",
+            },
+        },
+    }
+    lambda_handler(
+        s3_event,
+        {},
+    )
