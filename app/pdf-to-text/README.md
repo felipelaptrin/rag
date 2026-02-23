@@ -29,7 +29,7 @@ Make sure you have `uv` installed and that  (to run the code locally).
 3) Create a virtual environment using `uv`
 
 ```sh
-source .venv/bin/activate
+uv venv
 ```
 
 4) Active the environment
