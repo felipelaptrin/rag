@@ -1,0 +1,15 @@
+[project]
+name = "embedding"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.42.54",
+    "python-dotenv>=1.2.1",
+    "qdrant-client>=1.17.0",
+    "utils",
+]
+
+[tool.uv.sources]
+utils = { path = "../utils", editable = true }
