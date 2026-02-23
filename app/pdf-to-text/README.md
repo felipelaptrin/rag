@@ -1,6 +1,6 @@
 # PDF to Markdown Corpus Lambda
 
-AWS Lambda that reacts to an S3`“Object Created` event for a PDF, downloads the PDF to `/tmp`, extracts its text into Markdown, creates a small JSON "corpus" record, then uploads both outputs back to an S3 bucket (your knowledge base bucket).
+AWS Lambda that reacts to an event containing `s3_uri` for a PDF, downloads the PDF to `/tmp`, extracts its text into Markdown, creates a small JSON "corpus" record, then uploads both outputs back to an S3 bucket (the knowledge base bucket).
 
 ## What it does
 
