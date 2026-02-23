@@ -133,6 +133,9 @@ module "pdf_to_text" {
       }
     ]
   })
+  environment_variables = {
+    KNOWLEDGE_BASE_BUCKET = aws_s3_bucket.knowledge_base.bucket
+  }
 }
 
 ########################
@@ -159,6 +162,9 @@ module "chunking" {
       }
     ]
   })
+  environment_variables = {
+    KNOWLEDGE_BASE_BUCKET = aws_s3_bucket.knowledge_base.bucket
+  }
 }
 
 ########################
@@ -175,8 +181,7 @@ module "embedding" {
         Effect = "Allow"
         Action = [
           "s3:Listbucket",
-          "s3:GetObject",
-          "s3:PutObject"
+          "s3:GetObject"
         ]
         Resource = [
           aws_s3_bucket.knowledge_base.arn,
@@ -185,6 +190,11 @@ module "embedding" {
       },
     ]
   })
+  environment_variables = {
+    QDRANT_URL        = ""
+    QDRANT_API_KEY    = ""
+    QDRANT_COLLECTION = ""
+  }
 }
 
 ########################
