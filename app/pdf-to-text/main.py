@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import mimetypes
 import os
 import re
 from datetime import datetime, timezone
@@ -14,6 +13,7 @@ from urllib.parse import unquote_plus
 import boto3
 import pymupdf4llm
 from dotenv import load_dotenv
+from utils.s3 import download_s3_object, upload_s3_object
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,45 +64,6 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def download_s3_object(bucket: str, key: str, dest_path: Path) -> None:
-    logging.info("Downloading PDF from S3 bucket...")
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        s3_client.download_file(bucket, key, str(dest_path))
-        logging.info("Downloaded PDF completed")
-    except Exception as error:
-        logging.error(f"Could not download PDF from S3 Bucket because of: {error}")
-
-
-def upload_s3_object(bucket: str, key: str, file_path: Path) -> None:
-    logging.info(
-        f"Uploading file '{file_path}' to S3 bucket '{bucket}' using key '{key}'..."
-    )
-    suffix = file_path.suffix.lower()
-    if suffix == ".json":
-        content_type = "application/json; charset=utf-8"
-    elif suffix in (".md", ".markdown"):
-        content_type = "text/markdown; charset=utf-8"
-    else:
-        # fallback based on filename
-        content_type, _ = mimetypes.guess_type(str(file_path))
-        content_type = content_type or "text/plain; charset=utf-8"
-
-    try:
-        s3_client.upload_file(
-            str(file_path),
-            bucket,
-            key,
-            ExtraArgs={
-                "ContentType": content_type,
-                "ContentDisposition": "inline",
-            },
-        )
-        logging.info("Upload completed")
-    except Exception as error:
-        logging.error(f"Could not upload file to S3 Bucket because of: {error}")
-
-
 def pdf_to_markdown(pdf_path: Path) -> str:
     logging.info("Extracting PDF content to Markdown")
     md = pymupdf4llm.to_markdown(str(pdf_path), page_chunks=False)
@@ -132,7 +93,7 @@ def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
 
     # Put the downloaded PDF in /tmp
     local_pdf = TMP_DIR / safe_name(Path(key).name)
-    download_s3_object(bucket, key, local_pdf)
+    download_s3_object(s3_client, bucket, key, local_pdf)
 
     doc_id = sha256_file(local_pdf)[:16]
     title = Path(key).stem
@@ -160,8 +121,8 @@ def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
 
     md_key = f"clean/{doc_id}/extract_text.md"
     corpus_key = f"clean/{doc_id}/corpus.json"
-    upload_s3_object(BUCKET, md_key, file_path=MD_PATH)
-    upload_s3_object(BUCKET, corpus_key, file_path=CORPUS_PATH)
+    upload_s3_object(s3_client, BUCKET, md_key, file_path=MD_PATH)
+    upload_s3_object(s3_client, BUCKET, corpus_key, file_path=CORPUS_PATH)
 
     return record
 

@@ -9,4 +9,8 @@ dependencies = [
     "pymupdf-layout>=1.27.1",
     "pymupdf4llm>=0.3.4",
     "python-dotenv>=1.2.1",
+    "utils",
 ]
+
+[tool.uv.sources]
+utils = { path = "../utils", editable = true }
