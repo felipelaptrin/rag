@@ -27,6 +27,8 @@ load_dotenv()
 TMP_DIR = Path("/tmp")
 CORPUS_PATH = TMP_DIR / "corpus.json"
 MD_PATH = TMP_DIR / "extracted.md"
+BUCKET = os.getenv("KNOWLEDGE_BASE_BUCKET")
+s3_client = boto3.client("s3")
 
 
 def parse_s3_uri(s3_uri: str) -> Tuple[str, str]:
@@ -66,7 +68,7 @@ def download_s3_object(bucket: str, key: str, dest_path: Path) -> None:
     logging.info("Downloading PDF from S3 bucket...")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        boto3.client("s3").download_file(bucket, key, str(dest_path))
+        s3_client.download_file(bucket, key, str(dest_path))
         logging.info("Downloaded PDF completed")
     except Exception as error:
         logging.error(f"Could not download PDF from S3 Bucket because of: {error}")
@@ -87,7 +89,7 @@ def upload_s3_object(bucket: str, key: str, file_path: Path) -> None:
         content_type = content_type or "text/plain; charset=utf-8"
 
     try:
-        boto3.client("s3").upload_file(
+        s3_client.upload_file(
             str(file_path),
             bucket,
             key,
@@ -156,11 +158,10 @@ def process_pdf_from_s3(s3_uri: str) -> Dict[str, Any]:
         json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
-    bucket = os.getenv("KNOWLEDGE_BASE_BUCKET")
     md_key = f"clean/{doc_id}/extract_text.md"
     corpus_key = f"clean/{doc_id}/corpus.json"
-    upload_s3_object(bucket, md_key, file_path=MD_PATH)
-    upload_s3_object(bucket, corpus_key, file_path=CORPUS_PATH)
+    upload_s3_object(BUCKET, md_key, file_path=MD_PATH)
+    upload_s3_object(BUCKET, corpus_key, file_path=CORPUS_PATH)
 
     return record
 
