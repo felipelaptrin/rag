@@ -4,11 +4,15 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from uuid import NAMESPACE_URL, uuid5
 
 import boto3
 from dotenv import load_dotenv
-from utils.s3 import download_s3_object, parse_s3_uri, upload_s3_object
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qmodels
+from utils.env_vars import validate_required_env
+from utils.s3 import download_s3_object, parse_s3_uri
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,19 +24,30 @@ load_dotenv()
 
 TMP_DIR = Path("/tmp")
 INPUT_CHUNKS_PATH = TMP_DIR / "chunks.jsonl"
-OUTPUT_EMBEDDINGS_PATH = TMP_DIR / "embeddings.jsonl"
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-KNOWLEDGE_BASE_BUCKET = os.getenv("KNOWLEDGE_BASE_BUCKET")
+
 EMBEDDING_MODEL_ID = os.getenv("EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
 EMBEDDING_NORMALIZE = os.getenv("EMBEDDING_NORMALIZE", "true").lower() == "true"
 SLEEP_BETWEEN_CALLS_MS = int(os.getenv("SLEEP_BETWEEN_CALLS_MS", "0"))
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # optional for local/self-hosted
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION")
+QDRANT_UPSERT_BATCH_SIZE = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "64"))
+QDRANT_SSL_VERIFY = os.getenv("QDRANT_SSL_VERIFY", "true").lower() == "true"
+
 if EMBEDDING_DIMENSIONS not in (1024, 512, 256):
     raise ValueError("EMBEDDING_DIMENSIONS must be one of 1024, 512, 256")
+if QDRANT_UPSERT_BATCH_SIZE < 1:
+    raise ValueError("QDRANT_UPSERT_BATCH_SIZE must be >= 1")
 
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 s3_client = boto3.client("s3")
+
+qdrant_client = QdrantClient(
+    url=QDRANT_URL, api_key=QDRANT_API_KEY, verify=bool(QDRANT_SSL_VERIFY)
+)
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -53,12 +68,6 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
                 )
             records.append(rec)
     return records
-
-
-def write_jsonl(records: Iterable[Dict[str, Any]], path: Path) -> None:
-    with path.open("w", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 def invoke_embedding_model(text: str) -> List[float]:
@@ -90,9 +99,14 @@ def invoke_embedding_model(text: str) -> List[float]:
     return embedding
 
 
-def build_embedding_record(
+def qdrant_point_id_from_chunk_id(chunk_id: str) -> str:
+    # Deterministic UUID based on chunk_id (stable across reruns)
+    return str(uuid5(NAMESPACE_URL, chunk_id))
+
+
+def build_qdrant_point(
     chunk: Dict[str, Any], embedding: List[float]
-) -> Dict[str, Any]:
+) -> qmodels.PointStruct:
     chunk_meta = chunk.get("meta")
     if chunk_meta is None:
         chunk_meta = {}
@@ -101,11 +115,11 @@ def build_embedding_record(
 
     embedded_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    return {
+    payload = {
         "chunk_id": chunk["chunk_id"],
         "doc_id": chunk["doc_id"],
         "chunk_index": chunk["chunk_index"],
-        "embedding": embedding,
+        "text": chunk["text"],
         "meta": {
             **chunk_meta,
             "embedding_model_id": EMBEDDING_MODEL_ID,
@@ -114,6 +128,23 @@ def build_embedding_record(
             "embedded_at_utc": embedded_at_utc,
         },
     }
+
+    return qmodels.PointStruct(
+        id=qdrant_point_id_from_chunk_id(chunk["chunk_id"]),
+        vector=embedding,
+        payload=payload,
+    )
+
+
+def upsert_points(points: List[qmodels.PointStruct]) -> None:
+    if not points:
+        return
+
+    qdrant_client.upsert(
+        collection_name=QDRANT_COLLECTION,
+        points=points,
+        wait=True,
+    )
 
 
 def process_chunks_from_s3(s3_uri: str) -> Dict[str, Any]:
@@ -124,46 +155,53 @@ def process_chunks_from_s3(s3_uri: str) -> Dict[str, Any]:
 
     download_s3_object(s3_client, in_bucket, in_key, INPUT_CHUNKS_PATH)
 
-    chunk_records = read_jsonl(INPUT_CHUNKS_PATH)
-    if not chunk_records:
+    chunks = read_jsonl(INPUT_CHUNKS_PATH)
+    if not chunks:
         raise RuntimeError("Input chunks.jsonl is empty")
 
-    doc_ids = {rec["doc_id"] for rec in chunk_records}
+    doc_ids = {rec["doc_id"] for rec in chunks}
     if len(doc_ids) != 1:
         raise ValueError(f"Expected one doc_id in input, got: {sorted(doc_ids)}")
     doc_id = next(iter(doc_ids))
 
     logger.info(
-        f"Embedding doc_id={doc_id} chunk_count={len(chunk_records)} model={EMBEDDING_MODEL_ID} dims={EMBEDDING_DIMENSIONS} normalize={EMBEDDING_NORMALIZE}"
+        f"Embedding+Upsert doc_id={doc_id} chunk_count={len(chunks)} model={EMBEDDING_MODEL_ID} dims={EMBEDDING_DIMENSIONS} normalize={EMBEDDING_NORMALIZE} qdrant_collection={QDRANT_COLLECTION}"
     )
 
-    text_lengths = [len(r["text"]) for r in chunk_records]
+    text_lengths = [len(r["text"]) for r in chunks]
     logger.info(
         f"Input chunk lengths (chars): min={min(text_lengths)} avg={sum(text_lengths) // len(text_lengths)} max={max(text_lengths)}",
     )
 
-    output_records: List[Dict[str, Any]] = []
-    for rec in chunk_records:
-        embedding = invoke_embedding_model(rec["text"])
-        output_records.append(build_embedding_record(rec, embedding))
+    # Process sequentially for embeddings, batch only for Qdrant upsert
+    pending_points: List[qmodels.PointStruct] = []
+    upserted_count = 0
+
+    for chunk in chunks:
+        embedding = invoke_embedding_model(chunk["text"])
+        point = build_qdrant_point(chunk, embedding)
+        pending_points.append(point)
+
+        if len(pending_points) >= QDRANT_UPSERT_BATCH_SIZE:
+            upsert_points(pending_points)
+            upserted_count += len(pending_points)
+            logger.info(f"Upserted {upserted_count}/{len(chunks)} points to Qdrant")
+            pending_points = []
 
         if SLEEP_BETWEEN_CALLS_MS > 0:
             time.sleep(SLEEP_BETWEEN_CALLS_MS / 1000.0)
 
-    write_jsonl(output_records, OUTPUT_EMBEDDINGS_PATH)
+    if pending_points:
+        upsert_points(pending_points)
+        upserted_count += len(pending_points)
 
-    out_key = f"embeddings/{doc_id}/embeddings.jsonl"
-    upload_s3_object(s3_client, KNOWLEDGE_BASE_BUCKET, out_key, OUTPUT_EMBEDDINGS_PATH)
-
-    logger.info(
-        f"Generated {len(output_records)} embeddings",
-    )
+    logger.info(f"Generated and upserted {upserted_count} embeddings to Qdrant")
 
     return {
         "doc_id": doc_id,
         "input_chunks_s3_uri": s3_uri,
-        "output_embeddings_s3_uri": f"s3://{KNOWLEDGE_BASE_BUCKET}/{out_key}",
-        "embedding_count": len(output_records),
+        "qdrant_collection": QDRANT_COLLECTION,
+        "embedding_count": upserted_count,
         "embedding_model_id": EMBEDDING_MODEL_ID,
         "embedding_dimensions": EMBEDDING_DIMENSIONS,
         "embedding_normalize": EMBEDDING_NORMALIZE,
@@ -174,6 +212,7 @@ def process_chunks_from_s3(s3_uri: str) -> Dict[str, Any]:
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info("Input Event => %s", event)
+    validate_required_env(["QDRANT_URL", "QDRANT_API_KEY", "QDRANT_COLLECTION"])
 
     s3_uri = event.get("s3_uri")
     if not isinstance(s3_uri, str) or not s3_uri:
