@@ -29,6 +29,8 @@ s3_client = boto3.client("s3")
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1200"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+MAX_EMBED_INPUT_CHARS = int(os.getenv("MAX_EMBED_INPUT_CHARS", "40000"))
+TOKEN_RATIO = float(os.getenv("TOKEN_RATIO", "4.0"))
 
 
 def parse_s3_uri(s3_uri: str) -> tuple[str, str]:
@@ -45,6 +47,11 @@ def load_corpus_record(path: Path) -> Dict[str, Any]:
     raw = path.read_text(encoding="utf-8").strip()
     # Your extractor writes one JSON object (with newline), not JSONL list
     return json.loads(raw)
+
+
+def estimate_tokens(text: str) -> int:
+    # Conservative rough estimate for batching / guardrails (chars -> tokens)
+    return max(1, int(len(text) / TOKEN_RATIO))
 
 
 def split_markdown_text(text: str) -> List[str]:
@@ -73,7 +80,17 @@ def split_markdown_text(text: str) -> List[str]:
             final_chunks.extend(recursive_splitter.split_text(chunk))
 
     # Remove empty / whitespace chunks
-    return [c.strip() for c in final_chunks if c and c.strip()]
+    chunks = [c.strip() for c in final_chunks if c and c.strip()]
+
+    # Embedding safety guardrail
+    oversized = [len(c) for c in chunks if len(c) > MAX_EMBED_INPUT_CHARS]
+    if oversized:
+        raise RuntimeError(
+            f"Generated chunk(s) exceed MAX_EMBED_INPUT_CHARS={MAX_EMBED_INPUT_CHARS}: "
+            f"max={max(oversized)}"
+        )
+
+    return chunks
 
 
 def build_chunk_records(doc: Dict[str, Any], chunks: List[str]) -> List[Dict[str, Any]]:
@@ -93,6 +110,11 @@ def build_chunk_records(doc: Dict[str, Any], chunks: List[str]) -> List[Dict[str
                     "source_s3_uri": doc.get("source_s3_uri"),
                     "extracted_at_utc": doc.get("extracted_at_utc"),
                     "format": doc.get("format"),
+                    "chunk_size_chars": CHUNK_SIZE,
+                    "chunk_overlap_chars": CHUNK_OVERLAP,
+                    "chunking_strategy": "markdown+recursive",
+                    "char_count": len(chunk_text),
+                    "estimated_token_count": estimate_tokens(chunk_text),
                 },
             }
         )

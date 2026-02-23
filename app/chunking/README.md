@@ -28,7 +28,8 @@ the function will:
 `CHUNK_SIZE`: Target chunk size (characters)
 `CHUNK_OVERLAP`: Overlap between chunks (characters)
 `ENV`: If set to DEVELOPMENT, runs the local test block at import time
-
+`MAX_EMBED_INPUT_CHARS`: Safety limit in characters before sending text to the embedding model. The maximum value here should be the checked in the embedding models documentation. E.g. for [Titan V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) can intake up to 50,000 characters. Do not use the maximum!
+`TOKEN_RATIO`: Ratio to transform chars (in English) to tokens. E.g. for [Titan V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html?utm_source=chatgpt.com) this ratio is `4.7`
 
 ## How to run the project
 
