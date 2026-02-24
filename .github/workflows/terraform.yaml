@@ -15,7 +15,7 @@ env:
   DEV_TERRAFORM_ROLE: arn:aws:iam::937168356724:role/GitHubActions
 
 jobs:
-  ci:
+  terraform-ci:
     if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
