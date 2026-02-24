@@ -1,7 +1,7 @@
 ## UV Stage (Just used to use the binary)
 FROM ghcr.io/astral-sh/uv:0.10.4 AS uv
 
-## Intermidiate Stage
+## Intermediate Stage
 FROM public.ecr.aws/lambda/python:3.13 AS builder
 
 ARG APP_DIR
@@ -14,7 +14,7 @@ ENV UV_LINK_MODE=copy
 WORKDIR /work/app
 COPY ${APP_DIR}/pyproject.toml /work/app/pyproject.toml
 COPY ${APP_DIR}/uv.lock /work/app/uv.lock
-RUN mkdir /work/utils
+RUN mkdir -p /work/utils
 COPY utils/ /work/utils/
 
 # Install third-party dependencies (excluding workspace/local packages)
@@ -28,11 +28,21 @@ FROM public.ecr.aws/lambda/python:3.13
 
 ARG APP_DIR
 
+# Create non-root user/group
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -m -s /sbin/nologin appuser
+
 # Copy dependencies from builder
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
 
-# Copy app code (adjust if your app has more files than main.py)
+# Copy app code
 COPY ${APP_DIR}/main.py ${LAMBDA_TASK_ROOT}/main.py
+
+# Ensure non-root user can read/execute application files
+RUN chown -R appuser:appgroup ${LAMBDA_TASK_ROOT}
+
+# Run as non-root
+USER appuser
 
 # Lambda handler
 CMD ["main.lambda_handler"]
