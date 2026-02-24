@@ -64,6 +64,7 @@ runs:
         file: ${{ inputs.working_directory }}/Dockerfile
         push: true
         provenance: false
+        build-args: ${{ inputs.build_args }}
         tags: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr_name }}:${{ github.sha }}
         cache-from: type=gha,scope=${{ inputs.ecr_name }}
         cache-to: type=gha,mode=max,scope=${{ inputs.ecr_name }}
