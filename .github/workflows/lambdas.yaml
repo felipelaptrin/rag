@@ -70,7 +70,7 @@ jobs:
           build_args: APP_DIR=embedding
 
   lambda-pdf-to-text-cd:
-    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -88,7 +88,7 @@ jobs:
           build_args: APP_DIR=pdf-to-text
 
   lambda-chunking-cd:
-    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -106,7 +106,7 @@ jobs:
           build_args: APP_DIR=chunking
 
   lambda-embedding-cd:
-    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
