@@ -14,14 +14,15 @@ variable "environment" {
 #   default     = "amazon.titan-embed-text-v2:0"
 # }
 
-variable "vpc_id" {
-  description = "ID of the VPC to deploy the Qdrant service (ECS)"
+variable "vpc_cidr" {
+  description = "(Optional) The IPv4 CIDR block for the VPC. CIDR can be explicitly set or it can be derived from IPAM using `ipv4_netmask_length` & `ipv4_ipam_pool_id`"
   type        = string
 }
 
-variable "subnet_ids" {
-  type        = list(string)
-  description = "Subnet IDs for ECS tasks and EFS mount targets"
+variable "vpc_azs_number" {
+  description = "Number of AZs to use when deploying the VPC"
+  type        = number
+  default     = 2
 }
 
 variable "qdrant_image" {
@@ -42,8 +43,8 @@ variable "qdrant_memory" {
   default     = 2048
 }
 
-variable "deploy_qdrant_publicly" {
-  description = "Defined if Qdrant service in ECS will be deploy publicly. For dev/demo purpose we can use it publicly to save some costs (e.g. NAT Gateway, VPC Endpoints...)"
-  type        = bool
-  default     = false
+variable "cloud_map_namespace_name" {
+  type        = string
+  description = "Private DNS namespace name for Cloud Map"
+  default     = "internal"
 }

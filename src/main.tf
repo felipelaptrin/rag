@@ -1,4 +1,22 @@
 ########################
+### VPC
+########################
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "v6.6.0"
+
+  name = local.prefix
+  cidr = var.vpc_cidr
+
+  azs             = local.azs
+  private_subnets = local.private_subnets
+  public_subnets  = local.public_subnets
+
+  enable_nat_gateway = true
+  single_nat_gateway = true
+}
+
+########################
 ### S3 Bucket
 ########################
 resource "aws_s3_bucket" "knowledge_base" {
@@ -371,7 +389,7 @@ resource "aws_cloudwatch_log_group" "qdrant" {
 resource "aws_security_group" "qdrant_service" {
   name        = "${local.prefix}-qdrant-svc"
   description = "Security group for Qdrant ECS service"
-  vpc_id      = var.vpc_id
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     description = "Qdrant REST"
@@ -398,7 +416,7 @@ resource "aws_security_group" "qdrant_service" {
 resource "aws_security_group" "efs" {
   name        = "${local.prefix}-qdrant-efs"
   description = "Security group for Qdrant EFS"
-  vpc_id      = var.vpc_id
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     description     = "NFS from ECS tasks"
@@ -429,7 +447,7 @@ resource "aws_efs_file_system" "qdrant" {
 }
 
 resource "aws_efs_mount_target" "qdrant" {
-  for_each = toset(var.subnet_ids)
+  for_each = { for i, subnet_id in module.vpc.private_subnets : i => subnet_id }
 
   file_system_id  = aws_efs_file_system.qdrant.id
   subnet_id       = each.value
@@ -593,7 +611,7 @@ resource "aws_ecs_task_definition" "qdrant" {
 }
 
 ########################
-### ECS SERVICE (SINGLE REPLICA)
+### ECS SERVICE
 ########################
 resource "aws_ecs_service" "qdrant" {
   name                   = "${local.prefix}-qdrant"
@@ -603,12 +621,37 @@ resource "aws_ecs_service" "qdrant" {
   launch_type            = "FARGATE"
   enable_execute_command = true
   network_configuration {
-    subnets          = var.subnet_ids
+    subnets          = module.vpc.private_subnets
     security_groups  = [aws_security_group.qdrant_service.id]
-    assign_public_ip = var.deploy_qdrant_publicly
+    assign_public_ip = false
   }
 
   depends_on = [
     aws_efs_mount_target.qdrant
   ]
+}
+
+########################
+### ECS CLOUD MAP
+########################
+resource "aws_service_discovery_private_dns_namespace" "this" {
+  name        = var.cloud_map_namespace_name
+  description = "Private DNS namespace for ECS service discovery"
+  vpc         = module.vpc.vpc_id
+}
+
+resource "aws_service_discovery_service" "qdrant" {
+  name = "qdrant"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.this.id
+
+    dns_records {
+      type = "A"
+      ttl  = 10
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
 }
