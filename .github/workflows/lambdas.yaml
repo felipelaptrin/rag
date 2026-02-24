@@ -31,3 +31,4 @@ jobs:
           aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
           lambda_name: knowledge-base-dev-pdf-to-text
           ecr_name: knowledge-base-dev-pdf-to-text
+          build_args: APP_DIR=pdf-to-text

@@ -21,6 +21,10 @@ inputs:
   ecr_name:
     description: Name of the ECR repository to push the image to
     required: true
+  build_args:
+    description: "Optional Docker build args"
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -35,6 +39,7 @@ runs:
         file: ${{ inputs.working_directory }}/Dockerfile
         push: false
         tags: local-build:${{ github.sha }}
+        build-args: ${{ inputs.build_args }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
