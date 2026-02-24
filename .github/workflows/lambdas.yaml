@@ -1,0 +1,124 @@
+name: "Lambdas"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+env:
+  DEV_TERRAFORM_ROLE: arn:aws:iam::937168356724:role/GitHubActions
+
+jobs:
+  lambda-pdf-to-text-ci:
+    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: pdf-to-text
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "false"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-pdf-to-text
+          ecr_name: knowledge-base-dev-pdf-to-text
+          build_args: APP_DIR=pdf-to-text
+
+  lambda-chunking-ci:
+    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: chunking
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "false"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-chunking
+          ecr_name: knowledge-base-dev-chunking
+          build_args: APP_DIR=chunking
+
+  lambda-embedding-ci:
+    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: embedding
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "false"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-embedding
+          ecr_name: knowledge-base-dev-embedding
+          build_args: APP_DIR=embedding
+
+  lambda-pdf-to-text-cd:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: pdf-to-text
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "true"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-pdf-to-text
+          ecr_name: knowledge-base-dev-pdf-to-text
+          build_args: APP_DIR=pdf-to-text
+
+  lambda-chunking-cd:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: chunking
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "true"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-chunking
+          ecr_name: knowledge-base-dev-chunking
+          build_args: APP_DIR=chunking
+
+  lambda-embedding-cd:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: embedding
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "true"
+          working_directory: "apps"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-embedding
+          ecr_name: knowledge-base-dev-embedding
+          build_args: APP_DIR=embedding

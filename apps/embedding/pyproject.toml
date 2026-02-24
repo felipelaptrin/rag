@@ -3,7 +3,7 @@ name = "embedding"
 version = "0.1.0"
 description = "Reads a JSONL with chunks from S3 and generate the embedding for each chunk in a vector database (Qdrant)"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.42.54",
     "python-dotenv>=1.2.1",
