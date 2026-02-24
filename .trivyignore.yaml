@@ -21,3 +21,8 @@ misconfigurations:
       - modules/lambda/main.tf
       - ../modules/lambda/main.tf
       - main.tf
+  - id: AVD-AWS-0104
+    statement: Security group rule allows unrestricted egress to any IP address.
+    paths:
+      - main.tf
+      - src/main.tf
