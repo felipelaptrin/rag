@@ -34,7 +34,7 @@ runs:
 
     - name: Change directory
       shell: bash
-      run: ${{ inputs.working_directory }}
+      run: cd ${{ inputs.working_directory }}
 
     - name: Build Docker image
       if: ${{ inputs.deploy == 'false' }}
