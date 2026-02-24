@@ -48,3 +48,27 @@ variable "json_policy" {
   type        = string
   default     = null
 }
+
+variable "vpc_id" {
+  description = "The VPC ID to deploy the Lambda into. When provided, enables VPC mode and creates a security group."
+  type        = string
+  default     = null
+}
+
+variable "subnet_ids" {
+  description = "List of subnet IDs to deploy the Lambda into. Required when vpc_id is provided."
+  type        = list(string)
+  default     = []
+}
+
+variable "additional_security_group_ids" {
+  description = "Additional existing security group IDs to attach to the Lambda. These will be combined with the created security group (if any)."
+  type        = list(string)
+  default     = []
+}
+
+variable "allowed_cidr_blocks" {
+  description = "CIDR blocks to allow in the security group ingress rules. Defaults to VPC CIDR if not specified."
+  type        = list(string)
+  default     = null
+}
