@@ -396,12 +396,14 @@ resource "aws_security_group" "qdrant_service" {
     from_port   = 6333
     to_port     = 6333
     protocol    = "tcp"
+    cidr_blocks = [module.vpc.vpc_cidr_block]
   }
   ingress {
     description = "Qdrant gRPC"
     from_port   = 6334
     to_port     = 6334
     protocol    = "tcp"
+    cidr_blocks = [module.vpc.vpc_cidr_block]
   }
 
   egress {
@@ -645,13 +647,10 @@ resource "aws_service_discovery_service" "qdrant" {
 
   dns_config {
     namespace_id = aws_service_discovery_private_dns_namespace.this.id
-
     dns_records {
       type = "A"
       ttl  = 10
     }
-
     routing_policy = "MULTIVALUE"
   }
-
 }
