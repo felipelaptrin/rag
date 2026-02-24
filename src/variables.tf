@@ -14,6 +14,16 @@ variable "environment" {
 #   default     = "amazon.titan-embed-text-v2:0"
 # }
 
+variable "vpc_id" {
+  description = "ID of the VPC to deploy the Qdrant service (ECS)"
+  type        = string
+}
+
+variable "subnet_ids" {
+  type        = list(string)
+  description = "Subnet IDs for ECS tasks and EFS mount targets"
+}
+
 variable "qdrant_image" {
   description = "Image to be used in the Qdrant deployment"
   type        = string
@@ -21,13 +31,19 @@ variable "qdrant_image" {
 }
 
 variable "qdrant_cpu" {
+  description = "Task CPU units for Qdrant deployment"
   type        = number
-  description = "Task CPU units"
   default     = 1024
 }
 
 variable "qdrant_memory" {
+  description = "Task memory (MiB) for Qdrant deployment"
   type        = number
-  description = "Task memory (MiB)"
   default     = 2048
+}
+
+variable "deploy_qdrant_publicly" {
+  description = "Defined if Qdrant service in ECS will be deploy publicly. For dev/demo purpose we can use it publicly to save some costs (e.g. NAT Gateway, VPC Endpoints...)"
+  type        = bool
+  default     = false
 }

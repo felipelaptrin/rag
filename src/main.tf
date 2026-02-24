@@ -346,8 +346,8 @@ resource "random_password" "qdrant_api_key" {
 }
 
 resource "aws_secretsmanager_secret" "qdrant_api_key" {
-  name        = "qdrant/api-key"
-  description = "Contains the Qdrant API Key"
+  name        = "${local.prefix}/qdrant/api-key"
+  description = "Qdrant API key for ${local.prefix}"
 }
 
 resource "aws_secretsmanager_secret_version" "qdrant_api_key" {
@@ -358,7 +358,7 @@ resource "aws_secretsmanager_secret_version" "qdrant_api_key" {
 }
 
 ########################
-### QDRANT LOGS
+### CLOUDWATCH LOGS
 ########################
 resource "aws_cloudwatch_log_group" "qdrant" {
   name              = "/ecs/${local.prefix}-qdrant"
@@ -366,56 +366,98 @@ resource "aws_cloudwatch_log_group" "qdrant" {
 }
 
 ########################
-### QDRANT IAM
+### QDRANT SECURITY GROUPS
 ########################
-resource "aws_iam_role" "qdrant_instance_role" {
-  name = "${local.prefix}-qdrant-instance-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
+resource "aws_security_group" "qdrant_service" {
+  name        = "${local.prefix}-qdrant-svc"
+  description = "Security group for Qdrant ECS service"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "Qdrant REST"
+    from_port   = 6333
+    to_port     = 6333
+    protocol    = "tcp"
+  }
+  ingress {
+    description = "Qdrant gRPC"
+    from_port   = 6334
+    to_port     = 6334
+    protocol    = "tcp"
+  }
+
+  egress {
+    description = "All outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-resource "aws_iam_role_policy" "qdrant_exec_secrets" {
-  name = "${local.prefix}-qdrant-exec-secrets"
-  role = aws_iam_role.qdrant_task_execution_role.id
+resource "aws_security_group" "efs" {
+  name        = "${local.prefix}-qdrant-efs"
+  description = "Security group for Qdrant EFS"
+  vpc_id      = var.vpc_id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
-        ]
-        Resource = aws_secretsmanager_secret.qdrant_api_key.arn
-      }
-    ]
-  })
+  ingress {
+    description     = "NFS from ECS tasks"
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+    security_groups = [aws_security_group.qdrant_service.id]
+  }
+
+  egress {
+    description = "All outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "qdrant_ecs_ec2" {
-  role       = aws_iam_role.qdrant_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+########################
+### EFS (PERSISTENT QDRANT STORAGE)
+########################
+resource "aws_efs_file_system" "qdrant" {
+  creation_token = "${local.prefix}-qdrant"
+  encrypted      = true
+  lifecycle_policy {
+    transition_to_ia = "AFTER_30_DAYS"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "qdrant_ssm" {
-  role       = aws_iam_role.qdrant_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+resource "aws_efs_mount_target" "qdrant" {
+  for_each = toset(var.subnet_ids)
+
+  file_system_id  = aws_efs_file_system.qdrant.id
+  subnet_id       = each.value
+  security_groups = [aws_security_group.efs.id]
 }
 
-resource "aws_iam_instance_profile" "qdrant_instance_profile" {
-  name = "${local.prefix}-qdrant"
-  role = aws_iam_role.qdrant_instance_role.name
+resource "aws_efs_access_point" "qdrant" {
+  file_system_id = aws_efs_file_system.qdrant.id
+
+  posix_user {
+    uid = 0
+    gid = 0
+  }
+
+  root_directory {
+    path = "/qdrant-data"
+
+    creation_info {
+      owner_uid   = 0
+      owner_gid   = 0
+      permissions = "0770"
+    }
+  }
 }
 
+########################
+### IAM (TASK EXECUTION + TASK ROLE)
+########################
 resource "aws_iam_role" "qdrant_task_execution_role" {
   name = "${local.prefix}-qdrant-execution-role"
   assume_role_policy = jsonencode({
@@ -435,6 +477,25 @@ resource "aws_iam_role_policy_attachment" "ecs_task_exec_default" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "qdrant_secrets_manager" {
+  name = "${local.prefix}-qdrant-secrets"
+  role = aws_iam_role.qdrant_task_execution_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadQdrantApiKeySecret"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = aws_secretsmanager_secret.qdrant_api_key.arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "qdrant_task_role" {
   name = "${local.prefix}-qdrant-task-role"
 
@@ -451,41 +512,48 @@ resource "aws_iam_role" "qdrant_task_role" {
 }
 
 ########################
-### ECS TASK DEFINITION
+### ECS TASK DEFINITION (FARGATE)
 ########################
 resource "aws_ecs_task_definition" "qdrant" {
-  family                   = "qdrant"
-  requires_compatibilities = ["EC2"]
+  family                   = "${local.prefix}-qdrant"
+  requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  execution_role_arn       = aws_iam_role.qdrant_task_execution_role.arn
-  task_role_arn            = aws_iam_role.qdrant_task_role.arn
+
+  cpu    = tostring(var.qdrant_cpu)
+  memory = tostring(var.qdrant_memory)
+
+  execution_role_arn = aws_iam_role.qdrant_task_execution_role.arn
+  task_role_arn      = aws_iam_role.qdrant_task_role.arn
 
   volume {
-    name      = "qdrant-storage"
-    host_path = "/data/qdrant"
+    name = "qdrant-storage"
+
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.qdrant.id
+      transit_encryption = "ENABLED"
+
+      authorization_config {
+        access_point_id = aws_efs_access_point.qdrant.id
+        iam             = "ENABLED"
+      }
+    }
   }
 
   container_definitions = jsonencode([
     {
       name      = "qdrant"
       image     = var.qdrant_image
-      cpu       = var.qdrant_cpu
-      memory    = var.qdrant_memory
       essential = true
-
       portMappings = [
         {
           containerPort = 6333
-          hostPort      = 6333
           protocol      = "tcp"
         },
         {
           containerPort = 6334
-          hostPort      = 6334
           protocol      = "tcp"
         }
       ]
-
       mountPoints = [
         {
           sourceVolume  = "qdrant-storage"
@@ -493,14 +561,12 @@ resource "aws_ecs_task_definition" "qdrant" {
           readOnly      = false
         }
       ]
-
-      environment = [
+      secrets = [
         {
           name      = "QDRANT__SERVICE__API_KEY"
           valueFrom = "${aws_secretsmanager_secret.qdrant_api_key.arn}:api_key::"
         }
       ]
-
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -509,7 +575,6 @@ resource "aws_ecs_task_definition" "qdrant" {
           awslogs-stream-prefix = "qdrant"
         }
       }
-
       healthCheck = {
         command     = ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/readyz >/dev/null || exit 1"]
         interval    = 30
@@ -517,8 +582,6 @@ resource "aws_ecs_task_definition" "qdrant" {
         retries     = 3
         startPeriod = 30
       }
-
-      # Optional hardening. Qdrant may need write access to mounted storage only.
       readonlyRootFilesystem = false
     }
   ])
@@ -527,4 +590,25 @@ resource "aws_ecs_task_definition" "qdrant" {
     operating_system_family = "LINUX"
     cpu_architecture        = "ARM64"
   }
+}
+
+########################
+### ECS SERVICE (SINGLE REPLICA)
+########################
+resource "aws_ecs_service" "qdrant" {
+  name                   = "${local.prefix}-qdrant"
+  cluster                = aws_ecs_cluster.this.id
+  task_definition        = aws_ecs_task_definition.qdrant.arn
+  desired_count          = 1
+  launch_type            = "FARGATE"
+  enable_execute_command = true
+  network_configuration {
+    subnets          = var.subnet_ids
+    security_groups  = [aws_security_group.qdrant_service.id]
+    assign_public_ip = var.deploy_qdrant_publicly
+  }
+
+  depends_on = [
+    aws_efs_mount_target.qdrant
+  ]
 }
