@@ -40,8 +40,8 @@ runs:
         push: false
         tags: local-build:${{ github.sha }}
         build-args: ${{ inputs.build_args }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha,scope=${{ inputs.ecr_name }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.ecr_name }}
 
     - name: Configure AWS credentials
       if: ${{ inputs.deploy == 'true' }}
