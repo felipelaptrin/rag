@@ -17,6 +17,8 @@ COPY ${APP_DIR}/uv.lock /work/app/uv.lock
 RUN mkdir -p /work/utils
 COPY utils/ /work/utils/
 
+RUN dnf install -y gcc gcc-c++ make && dnf clean all
+
 # Install third-party dependencies (excluding workspace/local packages)
 RUN --mount=from=uv,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
@@ -28,21 +30,11 @@ FROM public.ecr.aws/lambda/python:3.13
 
 ARG APP_DIR
 
-# Create non-root user/group
-RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -m -s /sbin/nologin appuser
-
 # Copy dependencies from builder
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
 
 # Copy app code
 COPY ${APP_DIR}/main.py ${LAMBDA_TASK_ROOT}/main.py
-
-# Ensure non-root user can read/execute application files
-RUN chown -R appuser:appgroup ${LAMBDA_TASK_ROOT}
-
-# Run as non-root
-USER appuser
 
 # Lambda handler
 CMD ["main.lambda_handler"]
