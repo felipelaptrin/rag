@@ -11,6 +11,9 @@ permissions:
   pull-requests: write
   id-token: write
 
+env:
+  DEV_TERRAFORM_ROLE: arn:aws:iam::937168356724:role/GitHubActions
+
 jobs:
   ci:
     if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
@@ -41,7 +44,7 @@ jobs:
           aws_region: us-east-1
           tfconfig_path: config/dev/backend.hcl
           tfvars_path: config/dev/us-east-1.tfvars
-          aws_role_arn: ${{ vars.DEV_TERRAFORM_ROLE }}
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
           github_token: ${{ github.token }}
 
   apply-dev-us-east-1:
@@ -65,49 +68,5 @@ jobs:
           aws_region: us-east-1
           tfconfig_path: config/dev/backend.hcl
           tfvars_path: config/dev/us-east-1.tfvars
-          aws_role_arn: ${{ vars.DEV_TERRAFORM_ROLE }}
-          github_token: ${{ github.token }}
-
-  plan-prod-us-east-1:
-    name: "[PROD - us-east-1] Terraform Plan"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Terraform Plan
-        uses: ./.github/actions/terraform
-        with:
-          action: plan
-          environment: PROD
-          aws_region: us-east-1
-          tfconfig_path: config/prod/backend.hcl
-          tfvars_path: config/prod/us-east-1.tfvars
-          aws_role_arn: ${{ vars.PROD_TERRAFORM_ROLE }}
-          github_token: ${{ github.token }}
-
-  apply-prod-us-east-1:
-    needs:
-      - apply-dev-us-east-1
-      - plan-prod-us-east-1
-    name: "[PROD - us-east-1] Terraform Apply"
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment:
-      name: prod
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Terraform Apply
-        uses: ./.github/actions/terraform
-        with:
-          action: apply
-          environment: PROD
-          aws_region: us-east-1
-          tfconfig_path: config/prod/backend.hcl
-          tfvars_path: config/prod/us-east-1.tfvars
-          aws_role_arn: ${{ vars.PROD_TERRAFORM_ROLE }}
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
           github_token: ${{ github.token }}

@@ -209,10 +209,12 @@ module "embedding" {
     ]
   })
   environment_variables = {
-    QDRANT_URL        = ""
+    QDRANT_URL        = "http://${local.qdrant_hostname}:6333"
     QDRANT_API_KEY    = ""
     QDRANT_COLLECTION = ""
   }
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.public_subnets
 }
 
 ########################
@@ -643,7 +645,7 @@ resource "aws_service_discovery_private_dns_namespace" "this" {
 }
 
 resource "aws_service_discovery_service" "qdrant" {
-  name = "qdrant"
+  name = local.qdrant_hostname
 
   dns_config {
     namespace_id = aws_service_discovery_private_dns_namespace.this.id
