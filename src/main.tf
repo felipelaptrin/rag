@@ -329,3 +329,202 @@ resource "aws_pipes_pipe" "this" {
     }
   }
 }
+
+########################
+### ECS CLUSTER
+########################
+resource "aws_ecs_cluster" "this" {
+  name = local.prefix
+}
+
+########################
+### QDRANT API KEY
+########################
+resource "random_password" "qdrant_api_key" {
+  length  = 64
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "qdrant_api_key" {
+  name        = "qdrant/api-key"
+  description = "Contains the Qdrant API Key"
+}
+
+resource "aws_secretsmanager_secret_version" "qdrant_api_key" {
+  secret_id = aws_secretsmanager_secret.qdrant_api_key.id
+  secret_string = jsonencode({
+    api_key = random_password.qdrant_api_key.result
+  })
+}
+
+########################
+### QDRANT LOGS
+########################
+resource "aws_cloudwatch_log_group" "qdrant" {
+  name              = "/ecs/${local.prefix}-qdrant"
+  retention_in_days = 30
+}
+
+########################
+### QDRANT IAM
+########################
+resource "aws_iam_role" "qdrant_instance_role" {
+  name = "${local.prefix}-qdrant-instance-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "qdrant_exec_secrets" {
+  name = "${local.prefix}-qdrant-exec-secrets"
+  role = aws_iam_role.qdrant_task_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = aws_secretsmanager_secret.qdrant_api_key.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "qdrant_ecs_ec2" {
+  role       = aws_iam_role.qdrant_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_role_policy_attachment" "qdrant_ssm" {
+  role       = aws_iam_role.qdrant_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "qdrant_instance_profile" {
+  name = "${local.prefix}-qdrant"
+  role = aws_iam_role.qdrant_instance_role.name
+}
+
+resource "aws_iam_role" "qdrant_task_execution_role" {
+  name = "${local.prefix}-qdrant-execution-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_exec_default" {
+  role       = aws_iam_role.qdrant_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role" "qdrant_task_role" {
+  name = "${local.prefix}-qdrant-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+########################
+### ECS TASK DEFINITION
+########################
+resource "aws_ecs_task_definition" "qdrant" {
+  family                   = "qdrant"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "awsvpc"
+  execution_role_arn       = aws_iam_role.qdrant_task_execution_role.arn
+  task_role_arn            = aws_iam_role.qdrant_task_role.arn
+
+  volume {
+    name      = "qdrant-storage"
+    host_path = "/data/qdrant"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "qdrant"
+      image     = var.qdrant_image
+      cpu       = var.qdrant_cpu
+      memory    = var.qdrant_memory
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 6333
+          hostPort      = 6333
+          protocol      = "tcp"
+        },
+        {
+          containerPort = 6334
+          hostPort      = 6334
+          protocol      = "tcp"
+        }
+      ]
+
+      mountPoints = [
+        {
+          sourceVolume  = "qdrant-storage"
+          containerPath = "/qdrant/storage"
+          readOnly      = false
+        }
+      ]
+
+      environment = [
+        {
+          name      = "QDRANT__SERVICE__API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.qdrant_api_key.arn}:api_key::"
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.qdrant.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "qdrant"
+        }
+      }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/readyz >/dev/null || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 30
+      }
+
+      # Optional hardening. Qdrant may need write access to mounted storage only.
+      readonlyRootFilesystem = false
+    }
+  ])
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
+}
