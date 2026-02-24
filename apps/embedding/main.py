@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 from uuid import NAMESPACE_URL, uuid5
 
 import boto3
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
@@ -44,10 +45,24 @@ if QDRANT_UPSERT_BATCH_SIZE < 1:
 
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 s3_client = boto3.client("s3")
+secrets_manager_client = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 qdrant_client = QdrantClient(
     url=QDRANT_URL, api_key=QDRANT_API_KEY, verify=bool(QDRANT_SSL_VERIFY)
 )
+
+
+def get_api_key(secret_name: str) -> str:
+    if not secret_name.startswith("arn:aws:secretsmanager"):
+        return secret_name
+
+    try:
+        response = secrets_manager_client.get_secret_value(SecretId=secret_name)
+    except ClientError as e:
+        raise RuntimeError(f"Failed to retrieve secret '{secret_name}': {e}") from e
+
+    secret_str = response["SecretString"]
+    return json.loads(secret_str)["api_key"]
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
