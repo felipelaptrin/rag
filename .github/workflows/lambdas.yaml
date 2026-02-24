@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: pdf-to-text
-        uses: ./.github/actions/terraform
+        uses: ./.github/actions/build-and-push
         with:
           deploy: "false"
           working_directory: "apps"
