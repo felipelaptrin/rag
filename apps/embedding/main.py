@@ -8,10 +8,10 @@ from typing import Any, Dict, List
 from uuid import NAMESPACE_URL, uuid5
 
 import boto3
-from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+from secret import get_api_key
 from utils.env_vars import validate_required_env
 from utils.s3 import download_s3_object, parse_s3_uri
 
@@ -27,13 +27,16 @@ TMP_DIR = Path("/tmp")
 INPUT_CHUNKS_PATH = TMP_DIR / "chunks.jsonl"
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+bedrock_runtime = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+s3_client = boto3.client("s3")
+secrets_manager_client = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 EMBEDDING_MODEL_ID = os.getenv("EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
 EMBEDDING_NORMALIZE = os.getenv("EMBEDDING_NORMALIZE", "true").lower() == "true"
 SLEEP_BETWEEN_CALLS_MS = int(os.getenv("SLEEP_BETWEEN_CALLS_MS", "0"))
 QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # optional for local/self-hosted
+QDRANT_API_KEY = get_api_key(secrets_manager_client, os.getenv("QDRANT_API_KEY"))
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION")
 QDRANT_UPSERT_BATCH_SIZE = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "64"))
 QDRANT_SSL_VERIFY = os.getenv("QDRANT_SSL_VERIFY", "true").lower() == "true"
@@ -43,26 +46,9 @@ if EMBEDDING_DIMENSIONS not in (1024, 512, 256):
 if QDRANT_UPSERT_BATCH_SIZE < 1:
     raise ValueError("QDRANT_UPSERT_BATCH_SIZE must be >= 1")
 
-bedrock_runtime = boto3.client("bedrock-runtime", region_name=AWS_REGION)
-s3_client = boto3.client("s3")
-secrets_manager_client = boto3.client("secretsmanager", region_name=AWS_REGION)
-
 qdrant_client = QdrantClient(
     url=QDRANT_URL, api_key=QDRANT_API_KEY, verify=bool(QDRANT_SSL_VERIFY)
 )
-
-
-def get_api_key(secret_name: str) -> str:
-    if not secret_name.startswith("arn:aws:secretsmanager"):
-        return secret_name
-
-    try:
-        response = secrets_manager_client.get_secret_value(SecretId=secret_name)
-    except ClientError as e:
-        raise RuntimeError(f"Failed to retrieve secret '{secret_name}': {e}") from e
-
-    secret_str = response["SecretString"]
-    return json.loads(secret_str)["api_key"]
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
