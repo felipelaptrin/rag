@@ -59,5 +59,6 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_lambda_arn"></a> [lambda\_arn](#output\_lambda\_arn) | ARN of the Lambda |
+| <a name="output_lambda_name"></a> [lambda\_name](#output\_lambda\_name) | Name of the lambda |
 | <a name="output_lambda_security_group_id"></a> [lambda\_security\_group\_id](#output\_lambda\_security\_group\_id) | The Security Group ID of the Lambda |
 <!-- END_TF_DOCS -->
