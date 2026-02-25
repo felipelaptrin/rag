@@ -12,89 +12,89 @@ module "vpc" {
   private_subnets = local.private_subnets
   public_subnets  = local.public_subnets
 
-  enable_nat_gateway = true
-  single_nat_gateway = true
+  enable_nat_gateway = false #true
+  single_nat_gateway = false # true
 }
 
 ########################
 ### Bastion Host
 ########################
-resource "aws_security_group" "bastion" {
-  name        = "${local.prefix}-bastion"
-  description = "Security Group managed by Terraform"
-  vpc_id      = module.vpc.vpc_id
-}
+# resource "aws_security_group" "bastion" {
+#   name        = "${local.prefix}-bastion"
+#   description = "Security Group managed by Terraform"
+#   vpc_id      = module.vpc.vpc_id
+# }
 
-resource "aws_security_group_rule" "egress_bastion" {
-  type              = "egress"
-  description       = "Allow all outbound traffic"
-  security_group_id = aws_security_group.bastion.id
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-}
+# resource "aws_security_group_rule" "egress_bastion" {
+#   type              = "egress"
+#   description       = "Allow all outbound traffic"
+#   security_group_id = aws_security_group.bastion.id
+#   from_port         = 0
+#   to_port           = 65535
+#   protocol          = "tcp"
+#   cidr_blocks       = ["0.0.0.0/0"]
+# }
 
-resource "aws_iam_role" "bastion" {
-  name = "${local.prefix}-bastion"
-  assume_role_policy = jsonencode(
-    {
-      Statement = [
-        {
-          Action = "sts:AssumeRole"
-          Effect = "Allow"
-          Principal = {
-            Service = "ec2.amazonaws.com"
-          }
-          Sid = "EC2AssumeRole"
-        },
-      ]
-      Version = "2012-10-17"
-    }
-  )
-}
+# resource "aws_iam_role" "bastion" {
+#   name = "${local.prefix}-bastion"
+#   assume_role_policy = jsonencode(
+#     {
+#       Statement = [
+#         {
+#           Action = "sts:AssumeRole"
+#           Effect = "Allow"
+#           Principal = {
+#             Service = "ec2.amazonaws.com"
+#           }
+#           Sid = "EC2AssumeRole"
+#         },
+#       ]
+#       Version = "2012-10-17"
+#     }
+#   )
+# }
 
-resource "aws_iam_role_policy_attachment" "bastion" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  role       = aws_iam_role.bastion.name
-}
+# resource "aws_iam_role_policy_attachment" "bastion" {
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+#   role       = aws_iam_role.bastion.name
+# }
 
-resource "aws_iam_instance_profile" "bastion" {
-  name = "${local.prefix}-bastion"
-  path = "/"
-  role = aws_iam_role.bastion.name
-}
+# resource "aws_iam_instance_profile" "bastion" {
+#   name = "${local.prefix}-bastion"
+#   path = "/"
+#   role = aws_iam_role.bastion.name
+# }
 
-resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.ubuntu_latest.id
-  instance_type          = var.bastion_instance_type
-  subnet_id              = module.vpc.private_subnets[0]
-  iam_instance_profile   = aws_iam_instance_profile.bastion.name
-  user_data              = <<-EOT
-    #!/bin/bash
-    echo "Installing SSM Agent"
-    sudo snap install amazon-ssm-agent --classic
-    sudo snap list amazon-ssm-agent
-    sudo snap start amazon-ssm-agent
-    sudo snap services amazon-ssm-agent
-  EOT
-  vpc_security_group_ids = [aws_security_group.bastion.id]
+# resource "aws_instance" "bastion" {
+#   ami                    = data.aws_ami.ubuntu_latest.id
+#   instance_type          = var.bastion_instance_type
+#   subnet_id              = module.vpc.private_subnets[0]
+#   iam_instance_profile   = aws_iam_instance_profile.bastion.name
+#   user_data              = <<-EOT
+#     #!/bin/bash
+#     echo "Installing SSM Agent"
+#     sudo snap install amazon-ssm-agent --classic
+#     sudo snap list amazon-ssm-agent
+#     sudo snap start amazon-ssm-agent
+#     sudo snap services amazon-ssm-agent
+#   EOT
+#   vpc_security_group_ids = [aws_security_group.bastion.id]
 
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 1
-    http_tokens                 = "required"
-  }
+#   metadata_options {
+#     http_endpoint               = "enabled"
+#     http_protocol_ipv6          = "disabled"
+#     http_put_response_hop_limit = 1
+#     http_tokens                 = "required"
+#   }
 
-  root_block_device {
-    encrypted = true
-  }
+#   root_block_device {
+#     encrypted = true
+#   }
 
-  tags = {
-    Name = "${local.prefix}-bastion"
-  }
-}
+#   tags = {
+#     Name = "${local.prefix}-bastion"
+#   }
+# }
 
 ########################
 ### S3 Bucket
@@ -307,6 +307,57 @@ module "embedding" {
 }
 
 ########################
+### LAMBDA - API
+########################
+module "api" {
+  source      = "../modules/lambda"
+  name        = "${local.prefix}-api"
+  description = "API to handle questions from users and responses from LLM and RAG"
+  json_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [aws_secretsmanager_secret.qdrant_api_key.arn]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.embedding_model_id}",
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.llm_model_id}"
+        ]
+      },
+    ]
+  })
+  environment_variables = {
+    QDRANT_URL        = "http://${local.qdrant_hostname}.${var.cloud_map_namespace_name}:6333"
+    QDRANT_API_KEY    = aws_secretsmanager_secret.qdrant_api_key.arn
+    QDRANT_COLLECTION = "kb"
+  }
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+}
+
+resource "aws_lambda_permission" "apig_to_lambda" {
+  depends_on = [
+    module.api,
+    aws_api_gateway_rest_api.api
+  ]
+
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = module.api.lambda_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${var.aws_region}:${local.account_id}:${aws_api_gateway_rest_api.api.id}/*/*/*"
+}
+
+########################
 ### STEP FUNCTIONS
 ########################
 resource "aws_iam_role" "sfn" {
@@ -367,7 +418,7 @@ resource "aws_sfn_state_machine" "this" {
 }
 
 ########################
-### STEP FUNCTIONS
+### STEP FUNCTIONS IAM
 ########################
 resource "aws_iam_role" "pipe" {
   name = "${local.prefix}-pipe"
@@ -625,84 +676,84 @@ resource "aws_ebs_volume" "qdrant_data" {
 ########################
 ### ECS EC2 CONTAINER INSTANCE
 ########################
-resource "aws_instance" "ecs_qdrant_host" {
-  ami                    = data.aws_ssm_parameter.ecs_ami_arm64.value
-  instance_type          = var.qdrant_ec2_instance_type
-  subnet_id              = module.vpc.private_subnets[0]
-  vpc_security_group_ids = [aws_security_group.ecs_container_instance.id]
-  iam_instance_profile   = aws_iam_instance_profile.ecs_instance_profile.name
+# resource "aws_instance" "ecs_qdrant_host" {
+#   ami                    = data.aws_ssm_parameter.ecs_ami_arm64.value
+#   instance_type          = var.qdrant_ec2_instance_type
+#   subnet_id              = module.vpc.private_subnets[0]
+#   vpc_security_group_ids = [aws_security_group.ecs_container_instance.id]
+#   iam_instance_profile   = aws_iam_instance_profile.ecs_instance_profile.name
 
-  # ECS optimized AMI reads /etc/ecs/ecs.config
-  user_data = <<-EOF
-    #!/bin/bash
-    set -euxo pipefail
+#   # ECS optimized AMI reads /etc/ecs/ecs.config
+#   user_data = <<-EOF
+#     #!/bin/bash
+#     set -euxo pipefail
 
-    # Register instance into ECS cluster
-    cat >/etc/ecs/ecs.config <<EOC
-    ECS_CLUSTER=${aws_ecs_cluster.this.name}
-    ECS_ENABLE_TASK_IAM_ROLE=true
-    ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true
-    ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true
-    EOC
+#     # Register instance into ECS cluster
+#     cat >/etc/ecs/ecs.config <<EOC
+#     ECS_CLUSTER=${aws_ecs_cluster.this.name}
+#     ECS_ENABLE_TASK_IAM_ROLE=true
+#     ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true
+#     ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true
+#     EOC
 
-    # Wait for the extra EBS device to appear and mount it for Qdrant data
-    mkdir -p /ecs/qdrant-storage
+#     # Wait for the extra EBS device to appear and mount it for Qdrant data
+#     mkdir -p /ecs/qdrant-storage
 
-    DEV=""
-    for i in $(seq 1 60); do
-      for cand in /dev/nvme1n1 /dev/xvdb; do
-        if [ -b "$cand" ]; then
-          DEV="$cand"
-          break
-        fi
-      done
-      if [ -n "$DEV" ]; then
-        break
-      fi
-      sleep 2
-    done
+#     DEV=""
+#     for i in $(seq 1 60); do
+#       for cand in /dev/nvme1n1 /dev/xvdb; do
+#         if [ -b "$cand" ]; then
+#           DEV="$cand"
+#           break
+#         fi
+#       done
+#       if [ -n "$DEV" ]; then
+#         break
+#       fi
+#       sleep 2
+#     done
 
-    if [ -z "$DEV" ]; then
-      echo "Qdrant data EBS device not found" >&2
-      exit 1
-    fi
+#     if [ -z "$DEV" ]; then
+#       echo "Qdrant data EBS device not found" >&2
+#       exit 1
+#     fi
 
-    if ! blkid "$DEV"; then
-      mkfs -t xfs "$DEV"
-    fi
+#     if ! blkid "$DEV"; then
+#       mkfs -t xfs "$DEV"
+#     fi
 
-    UUID=$(blkid -s UUID -o value "$DEV")
-    grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /ecs/qdrant-storage xfs defaults,nofail 0 2" >> /etc/fstab
-    mount -a
+#     UUID=$(blkid -s UUID -o value "$DEV")
+#     grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /ecs/qdrant-storage xfs defaults,nofail 0 2" >> /etc/fstab
+#     mount -a
 
-    chmod 0770 /ecs/qdrant-storage
-    chown root:root /ecs/qdrant-storage
-  EOF
+#     chmod 0770 /ecs/qdrant-storage
+#     chown root:root /ecs/qdrant-storage
+#   EOF
 
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_protocol_ipv6          = "disabled"
-    http_put_response_hop_limit = 1
-    http_tokens                 = "required"
-  }
+#   metadata_options {
+#     http_endpoint               = "enabled"
+#     http_protocol_ipv6          = "disabled"
+#     http_put_response_hop_limit = 1
+#     http_tokens                 = "required"
+#   }
 
-  root_block_device {
-    encrypted = true
-  }
+#   root_block_device {
+#     encrypted = true
+#   }
 
-  tags = {
-    Name = "${local.prefix}-qdrant"
-  }
-}
+#   tags = {
+#     Name = "${local.prefix}-qdrant"
+#   }
+# }
 
-resource "aws_volume_attachment" "qdrant_data" {
-  device_name = "/dev/xvdb"
-  volume_id   = aws_ebs_volume.qdrant_data.id
-  instance_id = aws_instance.ecs_qdrant_host.id
+# resource "aws_volume_attachment" "qdrant_data" {
+#   device_name = "/dev/xvdb"
+#   volume_id   = aws_ebs_volume.qdrant_data.id
+#   instance_id = aws_instance.ecs_qdrant_host.id
 
-  # Avoid "force_detach" unless recovery case
-  force_detach = false
-}
+#   # Avoid "force_detach" unless recovery case
+#   force_detach = false
+# }
 
 ########################
 ### ECS TASK DEFINITION (EC2, HOST VOLUME -> EBS MOUNT)
@@ -780,42 +831,42 @@ resource "aws_ecs_task_definition" "qdrant" {
     cpu_architecture        = "ARM64"
   }
 
-  depends_on = [
-    aws_volume_attachment.qdrant_data
-  ]
+  # depends_on = [
+  #   aws_volume_attachment.qdrant_data
+  # ]
 }
 
 ########################
 ### ECS SERVICE
 ########################
-resource "aws_ecs_service" "qdrant" {
-  name                   = "${local.prefix}-qdrant"
-  cluster                = aws_ecs_cluster.this.id
-  task_definition        = aws_ecs_task_definition.qdrant.arn
-  desired_count          = 1
-  launch_type            = "EC2"
-  enable_execute_command = true
+# resource "aws_ecs_service" "qdrant" {
+#   name                   = "${local.prefix}-qdrant"
+#   cluster                = aws_ecs_cluster.this.id
+#   task_definition        = aws_ecs_task_definition.qdrant.arn
+#   desired_count          = 1
+#   launch_type            = "EC2"
+#   enable_execute_command = true
 
-  # awsvpc on EC2 gives the task its own ENI
-  network_configuration {
-    subnets          = module.vpc.private_subnets
-    security_groups  = [aws_security_group.qdrant_service.id]
-    assign_public_ip = false
-  }
+#   # awsvpc on EC2 gives the task its own ENI
+#   network_configuration {
+#     subnets          = module.vpc.private_subnets
+#     security_groups  = [aws_security_group.qdrant_service.id]
+#     assign_public_ip = false
+#   }
 
-  service_registries {
-    registry_arn = aws_service_discovery_service.qdrant.arn
-  }
+#   service_registries {
+#     registry_arn = aws_service_discovery_service.qdrant.arn
+#   }
 
-  # With a single host + single EBS-backed path, ensure only one task placement
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
+#   # With a single host + single EBS-backed path, ensure only one task placement
+#   deployment_minimum_healthy_percent = 0
+#   deployment_maximum_percent         = 100
 
-  depends_on = [
-    aws_instance.ecs_qdrant_host,
-    aws_volume_attachment.qdrant_data
-  ]
-}
+#   depends_on = [
+#     aws_instance.ecs_qdrant_host,
+#     aws_volume_attachment.qdrant_data
+#   ]
+# }
 
 ########################
 ### ECS CLOUD MAP
@@ -837,4 +888,80 @@ resource "aws_service_discovery_service" "qdrant" {
     }
     routing_policy = "MULTIVALUE"
   }
+}
+
+########################
+### API GATEWAY
+########################
+resource "aws_api_gateway_rest_api" "api" {
+  name        = local.project
+  description = "API Gateway that exposes the API deployed in a lambda"
+}
+
+resource "aws_api_gateway_resource" "api" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
+  path_part   = "{proxy+}"
+}
+
+resource "aws_api_gateway_method" "api_any_root" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_rest_api.api.root_resource_id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_method" "api_any" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.api.id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+
+resource "aws_api_gateway_integration" "api_any_root" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_rest_api.api.root_resource_id
+  http_method             = aws_api_gateway_method.api_any_root.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.aws_region}:${local.account_id}:function:${module.api.lambda_name}/invocations"
+}
+
+resource "aws_api_gateway_integration" "api_any" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.api.id
+  http_method             = aws_api_gateway_method.api_any.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${var.aws_region}:${local.account_id}:function:${module.api.lambda_name}/invocations"
+}
+
+
+resource "aws_api_gateway_deployment" "api" {
+  depends_on = [
+    aws_api_gateway_integration.api_any_root,
+    aws_api_gateway_integration.api_any,
+  ]
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.api.id,
+
+      aws_api_gateway_method.api_any.id,
+      aws_api_gateway_method.api_any_root.id,
+
+      aws_api_gateway_integration.api_any.id,
+      aws_api_gateway_integration.api_any_root.id,
+    ]))
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_api_gateway_stage" "api" {
+  deployment_id = aws_api_gateway_deployment.api.id
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  stage_name    = "api"
 }
