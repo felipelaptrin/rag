@@ -17,6 +17,86 @@ module "vpc" {
 }
 
 ########################
+### Bastion Host
+########################
+resource "aws_security_group" "bastion" {
+  name        = "${local.prefix}-bastion"
+  description = "Security Group managed by Terraform"
+  vpc_id      = module.vpc.vpc_id
+}
+
+resource "aws_security_group_rule" "egress_bastion" {
+  type              = "egress"
+  description       = "Allow all outbound traffic"
+  security_group_id = aws_security_group.bastion.id
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+resource "aws_iam_role" "bastion" {
+  name = "${local.prefix}-bastion"
+  assume_role_policy = jsonencode(
+    {
+      Statement = [
+        {
+          Action = "sts:AssumeRole"
+          Effect = "Allow"
+          Principal = {
+            Service = "ec2.amazonaws.com"
+          }
+          Sid = "EC2AssumeRole"
+        },
+      ]
+      Version = "2012-10-17"
+    }
+  )
+}
+
+resource "aws_iam_role_policy_attachment" "bastion" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.bastion.name
+}
+
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${local.prefix}-bastion"
+  path = "/"
+  role = aws_iam_role.bastion.name
+}
+
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.ubuntu_latest.id
+  instance_type          = var.bastion_instance_type
+  subnet_id              = module.vpc.private_subnets[0]
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+  user_data              = <<-EOT
+    #!/bin/bash
+    echo "Installing SSM Agent"
+    sudo snap install amazon-ssm-agent --classic
+    sudo snap list amazon-ssm-agent
+    sudo snap start amazon-ssm-agent
+    sudo snap services amazon-ssm-agent
+  EOT
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_protocol_ipv6          = "disabled"
+    http_put_response_hop_limit = 1
+    http_tokens                 = "required"
+  }
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = {
+    Name = "${local.prefix}-bastion"
+  }
+}
+
+########################
 ### S3 Bucket
 ########################
 resource "aws_s3_bucket" "knowledge_base" {
@@ -122,11 +202,6 @@ resource "aws_iam_role_policy" "eventbridge_to_sqs_policy" {
   })
 }
 
-
-########################
-### EventBridge Pipe (SQS-Step Functions Integration)
-########################
-
 ########################
 ### LAMBDA - Pdf-to-text
 ########################
@@ -210,11 +285,11 @@ module "embedding" {
   })
   environment_variables = {
     QDRANT_URL        = "http://${local.qdrant_hostname}:6333"
-    QDRANT_API_KEY    = ""
-    QDRANT_COLLECTION = ""
+    QDRANT_API_KEY    = aws_secretsmanager_secret.qdrant_api_key.arn
+    QDRANT_COLLECTION = "kb"
   }
   vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.public_subnets
+  subnet_ids = module.vpc.private_subnets
 }
 
 ########################
@@ -386,7 +461,7 @@ resource "aws_cloudwatch_log_group" "qdrant" {
 }
 
 ########################
-### QDRANT SECURITY GROUPS
+### SECURITY GROUPS
 ########################
 resource "aws_security_group" "qdrant_service" {
   name        = "${local.prefix}-qdrant-svc"
@@ -417,18 +492,10 @@ resource "aws_security_group" "qdrant_service" {
   }
 }
 
-resource "aws_security_group" "efs" {
-  name        = "${local.prefix}-qdrant-efs"
-  description = "Security group for Qdrant EFS"
+resource "aws_security_group" "ecs_container_instance" {
+  name        = "${local.prefix}-ecs-ec2"
+  description = "Security group for ECS EC2 container instance"
   vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    description     = "NFS from ECS tasks"
-    from_port       = 2049
-    to_port         = 2049
-    protocol        = "tcp"
-    security_groups = [aws_security_group.qdrant_service.id]
-  }
 
   egress {
     description = "All outbound"
@@ -440,45 +507,41 @@ resource "aws_security_group" "efs" {
 }
 
 ########################
-### EFS (PERSISTENT QDRANT STORAGE)
+### ECS EC2 CONTAINER INSTANCE IAM
 ########################
-resource "aws_efs_file_system" "qdrant" {
-  creation_token = "${local.prefix}-qdrant"
-  encrypted      = true
-  lifecycle_policy {
-    transition_to_ia = "AFTER_30_DAYS"
-  }
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "${local.prefix}-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "EC2AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
 }
 
-resource "aws_efs_mount_target" "qdrant" {
-  for_each = { for i, subnet_id in module.vpc.private_subnets : i => subnet_id }
-
-  file_system_id  = aws_efs_file_system.qdrant.id
-  subnet_id       = each.value
-  security_groups = [aws_security_group.efs.id]
+resource "aws_iam_role_policy_attachment" "ecs_instance_ecs" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
-resource "aws_efs_access_point" "qdrant" {
-  file_system_id = aws_efs_file_system.qdrant.id
+resource "aws_iam_role_policy_attachment" "ecs_instance_ssm" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-  posix_user {
-    uid = 0
-    gid = 0
-  }
-
-  root_directory {
-    path = "/qdrant-data"
-
-    creation_info {
-      owner_uid   = 0
-      owner_gid   = 0
-      permissions = "0770"
-    }
-  }
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "${local.prefix}-ecs-instance-profile"
+  role = aws_iam_role.ecs_instance_role.name
 }
 
 ########################
-### IAM (TASK EXECUTION + TASK ROLE)
+### ECS TASK IAM (EXECUTION + TASK ROLE)
 ########################
 resource "aws_iam_role" "qdrant_task_execution_role" {
   name = "${local.prefix}-qdrant-execution-role"
@@ -534,11 +597,105 @@ resource "aws_iam_role" "qdrant_task_role" {
 }
 
 ########################
-### ECS TASK DEFINITION (FARGATE)
+### PERSISTENT EBS VOLUME FOR QDRANT DATA
+########################
+# Keep the volume in one AZ and place the EC2 instance in the same subnet/AZ.
+# We pin to the first private subnet for simplicity.
+resource "aws_ebs_volume" "qdrant_data" {
+  availability_zone = data.aws_subnet.qdrant_host.availability_zone
+  size              = var.qdrant_data_volume_size_gb
+  type              = "gp3"
+  encrypted         = true
+}
+
+########################
+### ECS EC2 CONTAINER INSTANCE
+########################
+resource "aws_instance" "ecs_qdrant_host" {
+  ami                    = data.aws_ssm_parameter.ecs_ami_arm64.value
+  instance_type          = var.qdrant_ec2_instance_type
+  subnet_id              = module.vpc.private_subnets[0]
+  vpc_security_group_ids = [aws_security_group.ecs_container_instance.id]
+  iam_instance_profile   = aws_iam_instance_profile.ecs_instance_profile.name
+
+  # ECS optimized AMI reads /etc/ecs/ecs.config
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euxo pipefail
+
+    # Register instance into ECS cluster
+    cat >/etc/ecs/ecs.config <<EOC
+    ECS_CLUSTER=${aws_ecs_cluster.this.name}
+    ECS_ENABLE_TASK_IAM_ROLE=true
+    ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true
+    ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true
+    EOC
+
+    # Wait for the extra EBS device to appear and mount it for Qdrant data
+    mkdir -p /ecs/qdrant-storage
+
+    DEV=""
+    for i in $(seq 1 60); do
+      for cand in /dev/nvme1n1 /dev/xvdb; do
+        if [ -b "$cand" ]; then
+          DEV="$cand"
+          break
+        fi
+      done
+      if [ -n "$DEV" ]; then
+        break
+      fi
+      sleep 2
+    done
+
+    if [ -z "$DEV" ]; then
+      echo "Qdrant data EBS device not found" >&2
+      exit 1
+    fi
+
+    if ! blkid "$DEV"; then
+      mkfs -t xfs "$DEV"
+    fi
+
+    UUID=$(blkid -s UUID -o value "$DEV")
+    grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /ecs/qdrant-storage xfs defaults,nofail 0 2" >> /etc/fstab
+    mount -a
+
+    chmod 0770 /ecs/qdrant-storage
+    chown root:root /ecs/qdrant-storage
+  EOF
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_protocol_ipv6          = "disabled"
+    http_put_response_hop_limit = 1
+    http_tokens                 = "required"
+  }
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = {
+    Name = "${local.prefix}-qdrant"
+  }
+}
+
+resource "aws_volume_attachment" "qdrant_data" {
+  device_name = "/dev/xvdb"
+  volume_id   = aws_ebs_volume.qdrant_data.id
+  instance_id = aws_instance.ecs_qdrant_host.id
+
+  # Avoid "force_detach" unless recovery case
+  force_detach = false
+}
+
+########################
+### ECS TASK DEFINITION (EC2, HOST VOLUME -> EBS MOUNT)
 ########################
 resource "aws_ecs_task_definition" "qdrant" {
   family                   = "${local.prefix}-qdrant"
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["EC2"]
   network_mode             = "awsvpc"
 
   cpu    = tostring(var.qdrant_cpu)
@@ -547,18 +704,12 @@ resource "aws_ecs_task_definition" "qdrant" {
   execution_role_arn = aws_iam_role.qdrant_task_execution_role.arn
   task_role_arn      = aws_iam_role.qdrant_task_role.arn
 
+  # Host bind mount. This host path lives on the attached EBS volume
+  # because the EC2 instance user_data mounts EBS to /ecs/qdrant-storage.
   volume {
     name = "qdrant-storage"
 
-    efs_volume_configuration {
-      file_system_id     = aws_efs_file_system.qdrant.id
-      transit_encryption = "ENABLED"
-
-      authorization_config {
-        access_point_id = aws_efs_access_point.qdrant.id
-        iam             = "ENABLED"
-      }
-    }
+    host_path = "/ecs/qdrant-storage"
   }
 
   container_definitions = jsonencode([
@@ -569,10 +720,12 @@ resource "aws_ecs_task_definition" "qdrant" {
       portMappings = [
         {
           containerPort = 6333
+          hostPort      = 6333
           protocol      = "tcp"
         },
         {
           containerPort = 6334
+          hostPort      = 6334
           protocol      = "tcp"
         }
       ]
@@ -598,7 +751,7 @@ resource "aws_ecs_task_definition" "qdrant" {
         }
       }
       healthCheck = {
-        command     = ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/readyz >/dev/null || exit 1"]
+        command     = ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
         interval    = 30
         timeout     = 5
         retries     = 3
@@ -612,6 +765,10 @@ resource "aws_ecs_task_definition" "qdrant" {
     operating_system_family = "LINUX"
     cpu_architecture        = "ARM64"
   }
+
+  depends_on = [
+    aws_volume_attachment.qdrant_data
+  ]
 }
 
 ########################
@@ -622,16 +779,27 @@ resource "aws_ecs_service" "qdrant" {
   cluster                = aws_ecs_cluster.this.id
   task_definition        = aws_ecs_task_definition.qdrant.arn
   desired_count          = 1
-  launch_type            = "FARGATE"
+  launch_type            = "EC2"
   enable_execute_command = true
+
+  # awsvpc on EC2 gives the task its own ENI
   network_configuration {
     subnets          = module.vpc.private_subnets
     security_groups  = [aws_security_group.qdrant_service.id]
     assign_public_ip = false
   }
 
+  service_registries {
+    registry_arn = aws_service_discovery_service.qdrant.arn
+  }
+
+  # With a single host + single EBS-backed path, ensure only one task placement
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+
   depends_on = [
-    aws_efs_mount_target.qdrant
+    aws_instance.ecs_qdrant_host,
+    aws_volume_attachment.qdrant_data
   ]
 }
 

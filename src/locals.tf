@@ -7,5 +7,7 @@ locals {
   private_subnets = [for k, v in local.azs : cidrsubnet(var.vpc_cidr, 8, k)]
   public_subnets  = [for k, v in local.azs : cidrsubnet(var.vpc_cidr, 8, k + 4)]
 
+  bastion_instance_architecture = contains(data.aws_ec2_instance_type.this.supported_architectures, "arm64") ? "arm64" : "x86_64"
+
   qdrant_hostname = "qdrant"
 }

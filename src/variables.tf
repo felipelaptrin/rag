@@ -19,6 +19,12 @@ variable "vpc_cidr" {
   type        = string
 }
 
+variable "bastion_instance_type" {
+  description = "Defines the instance type of the EC2 bastion host"
+  type        = string
+  default     = "t4g.nano"
+}
+
 variable "vpc_azs_number" {
   description = "Number of AZs to use when deploying the VPC"
   type        = number
@@ -31,16 +37,27 @@ variable "qdrant_image" {
   default     = "qdrant/qdrant:v1.17"
 }
 
+variable "qdrant_ec2_instance_type" {
+  description = "EC2 instance type to deploy Qdrant"
+  type        = string
+  default     = "t4g.small"
+}
+
 variable "qdrant_cpu" {
-  description = "Task CPU units for Qdrant deployment"
+  description = "Task CPU units for Qdrant deployment. Make sure this is smaller than the memory avaible for the 'qdrant_ec2_instance_type' instance type."
   type        = number
   default     = 1024
 }
 
 variable "qdrant_memory" {
-  description = "Task memory (MiB) for Qdrant deployment"
+  description = "Task memory (MiB) for Qdrant deployment. Make sure this is smaller than the memory avaible for the 'qdrant_ec2_instance_type' instance type."
   type        = number
-  default     = 2048
+  default     = 1536
+}
+
+variable "qdrant_data_volume_size_gb" {
+  type    = number
+  default = 10
 }
 
 variable "cloud_map_namespace_name" {
