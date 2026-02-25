@@ -34,7 +34,7 @@ ARG APP_DIR
 COPY --from=builder ${LAMBDA_TASK_ROOT} ${LAMBDA_TASK_ROOT}
 
 # Copy app code
-COPY ${APP_DIR}/main.py ${LAMBDA_TASK_ROOT}/main.py
+COPY ${APP_DIR}/ ${LAMBDA_TASK_ROOT}/
 
 # Lambda handler
 CMD ["main.lambda_handler"]

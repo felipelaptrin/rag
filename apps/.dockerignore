@@ -1,0 +1,6 @@
+.venv
+.env
+.env.example
+README.md
+qdrant_storage
+__pycache__
