@@ -298,7 +298,7 @@ module "embedding" {
     ]
   })
   environment_variables = {
-    QDRANT_URL        = "http://${local.qdrant_hostname}:6333"
+    QDRANT_URL        = "http://${local.qdrant_hostname}.${var.cloud_map_namespace_name}:6333"
     QDRANT_API_KEY    = aws_secretsmanager_secret.qdrant_api_key.arn
     QDRANT_COLLECTION = "kb"
   }
