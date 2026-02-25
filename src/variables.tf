@@ -8,11 +8,11 @@ variable "environment" {
   type        = string
 }
 
-# variable "embedding_model_id" {
-#   description = "Embedding model used to perform the embedding operation"
-#   type        = string
-#   default     = "amazon.titan-embed-text-v2:0"
-# }
+variable "embedding_model_id" {
+  description = "Embedding model used to perform the embedding operation"
+  type        = string
+  default     = "amazon.titan-embed-text-v2:0"
+}
 
 variable "vpc_cidr" {
   description = "(Optional) The IPv4 CIDR block for the VPC. CIDR can be explicitly set or it can be derived from IPAM using `ipv4_netmask_length` & `ipv4_ipam_pool_id`"

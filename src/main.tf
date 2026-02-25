@@ -281,6 +281,20 @@ module "embedding" {
           "${aws_s3_bucket.knowledge_base.arn}/*"
         ]
       },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [aws_secretsmanager_secret.qdrant_api_key.arn]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.embedding_model_id}"]
+      },
     ]
   })
   environment_variables = {

@@ -88,6 +88,7 @@
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | Region to deploy the resources | `string` | n/a | yes |
 | <a name="input_bastion_instance_type"></a> [bastion\_instance\_type](#input\_bastion\_instance\_type) | Defines the instance type of the EC2 bastion host | `string` | `"t4g.nano"` | no |
 | <a name="input_cloud_map_namespace_name"></a> [cloud\_map\_namespace\_name](#input\_cloud\_map\_namespace\_name) | Private DNS namespace name for Cloud Map | `string` | `"internal"` | no |
+| <a name="input_embedding_model_id"></a> [embedding\_model\_id](#input\_embedding\_model\_id) | Embedding model used to perform the embedding operation | `string` | `"amazon.titan-embed-text-v2:0"` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Name of the environment | `string` | n/a | yes |
 | <a name="input_qdrant_cpu"></a> [qdrant\_cpu](#input\_qdrant\_cpu) | Task CPU units for Qdrant deployment. Make sure this is smaller than the memory avaible for the 'qdrant\_ec2\_instance\_type' instance type. | `number` | `1024` | no |
 | <a name="input_qdrant_data_volume_size_gb"></a> [qdrant\_data\_volume\_size\_gb](#input\_qdrant\_data\_volume\_size\_gb) | n/a | `number` | `10` | no |
