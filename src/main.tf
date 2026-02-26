@@ -302,8 +302,9 @@ module "embedding" {
     QDRANT_API_KEY    = aws_secretsmanager_secret.qdrant_api_key.arn
     QDRANT_COLLECTION = "kb"
   }
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
+  vpc_enabled = true
+  vpc_id      = module.vpc.vpc_id
+  subnet_ids  = module.vpc.private_subnets
 }
 
 ########################
@@ -351,8 +352,9 @@ module "api" {
     LOG_LEVEL                   = "INFO"
     AWS_LWA_INVOKE_MODE         = "response_stream" # Ref: https://github.com/awslabs/aws-lambda-web-adapter
   }
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
+  vpc_enabled = true
+  vpc_id      = module.vpc.vpc_id
+  subnet_ids  = module.vpc.private_subnets
 }
 
 resource "aws_lambda_permission" "apig_to_lambda" {

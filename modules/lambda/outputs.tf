@@ -10,5 +10,5 @@ output "lambda_name" {
 
 output "lambda_security_group_id" {
   description = "The Security Group ID of the Lambda"
-  value       = local.create_security_group ? aws_security_group.this[0].id : ""
+  value       = var.vpc_enabled ? aws_security_group.this[0].id : ""
 }

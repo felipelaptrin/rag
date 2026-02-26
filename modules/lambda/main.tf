@@ -59,7 +59,7 @@ resource "aws_iam_role" "this" {
 
 # Attach VPC access policy when VPC mode is enabled
 resource "aws_iam_role_policy_attachment" "vpc_access" {
-  count = local.vpc_enabled ? 1 : 0
+  count = var.vpc_enabled ? 1 : 0
 
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -97,7 +97,7 @@ resource "aws_lambda_function" "this" {
   }
 
   dynamic "vpc_config" {
-    for_each = local.vpc_enabled ? [true] : []
+    for_each = var.vpc_enabled ? [true] : []
     content {
       subnet_ids         = var.subnet_ids
       security_group_ids = [aws_security_group.this[0].id]
@@ -113,7 +113,7 @@ resource "aws_lambda_function" "this" {
 ### VPC-related
 ########################
 resource "aws_security_group" "this" {
-  count       = local.create_security_group ? 1 : 0
+  count       = var.vpc_enabled ? 1 : 0
   name        = "${var.name}-lambda-sg"
   description = "Security group for Lambda ${var.name} in VPC"
   vpc_id      = var.vpc_id

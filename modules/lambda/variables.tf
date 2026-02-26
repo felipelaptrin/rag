@@ -49,10 +49,17 @@ variable "json_policy" {
   default     = null
 }
 
+variable "vpc_enabled" {
+  description = "Whether to enable VPC for the Lambda. When true, vpc_id and subnet_ids must also be provided."
+  type        = bool
+  default     = false
+}
+
+
 variable "vpc_id" {
   description = "The VPC ID to deploy the Lambda into. When provided, enables VPC mode and creates a security group."
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "subnet_ids" {
