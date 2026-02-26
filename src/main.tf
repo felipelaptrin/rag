@@ -326,7 +326,8 @@ module "api" {
       {
         Effect = "Allow"
         Action = [
-          "bedrock:InvokeModel"
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
         ]
         Resource = [
           "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.embedding_model_id}",
@@ -341,13 +342,14 @@ module "api" {
     QDRANT_COLLECTION           = "kb"
     BEDROCK_EMBEDDING_MODEL_ID  = var.embedding_model_id
     BEDROCK_GENERATION_MODEL_ID = var.llm_model_id
-    TOP_K_DEFAULT               = "5"
+    TOP_K_DEFAULT               = "3"
     TOP_K_MAX                   = "10"
-    MAX_CONTEXT_CHUNKS          = "5"
+    MAX_CONTEXT_CHUNKS          = "3"
     MAX_CONTEXT_CHARS           = "12000"
     GEN_TEMPERATURE             = "0.2"
     GEN_MAX_TOKENS              = "800"
     LOG_LEVEL                   = "INFO"
+    AWS_LWA_INVOKE_MODE         = "response_stream" # Ref: https://github.com/awslabs/aws-lambda-web-adapter
   }
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -933,7 +935,6 @@ resource "aws_api_gateway_method" "ask" {
   authorization = "NONE"
 }
 
-
 resource "aws_api_gateway_integration" "health" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.health.id
@@ -952,7 +953,6 @@ resource "aws_api_gateway_integration" "ask" {
   response_transfer_mode  = "STREAM"
   uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2021-11-15/functions/${module.api.lambda_arn}/response-streaming-invocations"
 }
-
 
 resource "aws_api_gateway_deployment" "api" {
   depends_on = [
