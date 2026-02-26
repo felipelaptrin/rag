@@ -20,6 +20,7 @@
 
 | Name | Source | Version |
 |------|--------|---------|
+| <a name="module_api"></a> [api](#module\_api) | ../modules/lambda | n/a |
 | <a name="module_chunking"></a> [chunking](#module\_chunking) | ../modules/lambda | n/a |
 | <a name="module_embedding"></a> [embedding](#module\_embedding) | ../modules/lambda | n/a |
 | <a name="module_pdf_to_text"></a> [pdf\_to\_text](#module\_pdf\_to\_text) | ../modules/lambda | n/a |
@@ -29,6 +30,15 @@
 
 | Name | Type |
 |------|------|
+| [aws_api_gateway_deployment.api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_deployment) | resource |
+| [aws_api_gateway_integration.ask](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_integration) | resource |
+| [aws_api_gateway_integration.health](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_integration) | resource |
+| [aws_api_gateway_method.ask](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_method) | resource |
+| [aws_api_gateway_method.health](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_method) | resource |
+| [aws_api_gateway_resource.ask](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_resource) | resource |
+| [aws_api_gateway_resource.health](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_resource) | resource |
+| [aws_api_gateway_rest_api.api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_rest_api) | resource |
+| [aws_api_gateway_stage.api](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_stage) | resource |
 | [aws_cloudwatch_event_rule.s3_object_created](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.s3_to_sqs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_cloudwatch_log_group.qdrant](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
@@ -57,6 +67,7 @@
 | [aws_iam_role_policy_attachment.sfn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_instance.bastion](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance) | resource |
 | [aws_instance.ecs_qdrant_host](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance) | resource |
+| [aws_lambda_permission.apig_to_lambda](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission) | resource |
 | [aws_pipes_pipe.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/pipes_pipe) | resource |
 | [aws_s3_bucket.knowledge_base](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket_notification.knowledge_base](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_notification) | resource |
@@ -90,6 +101,7 @@
 | <a name="input_cloud_map_namespace_name"></a> [cloud\_map\_namespace\_name](#input\_cloud\_map\_namespace\_name) | Private DNS namespace name for Cloud Map | `string` | `"internal"` | no |
 | <a name="input_embedding_model_id"></a> [embedding\_model\_id](#input\_embedding\_model\_id) | Embedding model used to perform the embedding operation | `string` | `"amazon.titan-embed-text-v2:0"` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Name of the environment | `string` | n/a | yes |
+| <a name="input_llm_model_id"></a> [llm\_model\_id](#input\_llm\_model\_id) | LLM used to generate response to user | `string` | `"google.gemma-3-4b-it"` | no |
 | <a name="input_qdrant_cpu"></a> [qdrant\_cpu](#input\_qdrant\_cpu) | Task CPU units for Qdrant deployment. Make sure this is smaller than the memory avaible for the 'qdrant\_ec2\_instance\_type' instance type. | `number` | `1024` | no |
 | <a name="input_qdrant_data_volume_size_gb"></a> [qdrant\_data\_volume\_size\_gb](#input\_qdrant\_data\_volume\_size\_gb) | n/a | `number` | `10` | no |
 | <a name="input_qdrant_ec2_instance_type"></a> [qdrant\_ec2\_instance\_type](#input\_qdrant\_ec2\_instance\_type) | EC2 instance type to deploy Qdrant | `string` | `"t4g.small"` | no |
@@ -102,5 +114,5 @@
 
 | Name | Description |
 |------|-------------|
-| <a name="output_bastion_instance_id"></a> [bastion\_instance\_id](#output\_bastion\_instance\_id) | Instance ID of the bastion host |
+| <a name="output_api_gateway_url"></a> [api\_gateway\_url](#output\_api\_gateway\_url) | n/a |
 <!-- END_TF_DOCS -->
