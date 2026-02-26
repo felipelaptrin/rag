@@ -519,8 +519,9 @@ resource "random_password" "qdrant_api_key" {
 }
 
 resource "aws_secretsmanager_secret" "qdrant_api_key" {
-  name        = "${local.prefix}/qdrant/api-key"
-  description = "Qdrant API key for ${local.prefix}"
+  name                    = "${local.prefix}/qdrant/api-key"
+  description             = "Qdrant API key for ${local.prefix}"
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "qdrant_api_key" {
