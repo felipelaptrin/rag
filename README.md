@@ -78,3 +78,38 @@ mise run plan-dev
 ```bash
 mise run apply-dev
 ```
+
+### Qdrant collection creation (One time only)
+
+1) Copy the Instance ID of the Bastions host (Terraform outputs)
+
+2) Run SSM portforward
+
+```sh
+aws ssm start-session \
+  --target <BASTION_INSTANCE_ID> \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["qdrant.internal"],"portNumber":["6333"],"localPortNumber":["6333"]
+```
+
+Do not close this terminal! Open a new one from now on
+
+3) Copy Qdrant API key from Secrets Manager
+
+```sh
+QDRANT_API_KEY=PASTETHEVALUEHERE
+```
+
+4) Create the collection
+
+```sh
+curl -sS -X PUT "http://localhost:6333/collections/kb" \
+  -H "Content-Type: application/json" \
+  -H "api-key: $QDRANT_API_KEY" \
+  --data '{
+    "vectors": {
+      "size": 1024,
+      "distance": "Cosine"
+    }
+  }'
+```
