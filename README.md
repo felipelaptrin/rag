@@ -89,7 +89,7 @@ mise run apply-dev
 aws ssm start-session \
   --target <BASTION_INSTANCE_ID> \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["qdrant.internal"],"portNumber":["6333"],"localPortNumber":["6333"]
+  --parameters '{"host":["qdrant.internal"],"portNumber":["6333"],"localPortNumber":["6333"]}'
 ```
 
 Do not close this terminal! Open a new one from now on
@@ -112,4 +112,16 @@ curl -sS -X PUT "http://localhost:6333/collections/kb" \
       "distance": "Cosine"
     }
   }'
+```
+
+PS: You can also access via the browser `http://localhost:6333/dashboard`
+
+
+### Ask the question (Self-Managed RAG)
+
+```sh
+curl -X POST \
+  '<API_GATEWAY_ENDPOINT>/ask' \
+  -H "Content-Type: application/json" \
+  -d '{"question": "i want to return an item and get my money back, how?"}'
 ```

@@ -13,10 +13,6 @@ resource "null_resource" "bootstrap" {
   provisioner "local-exec" {
     command = "sh ${path.module}/bootstrap-lambda/push-to-ecr.sh ${data.aws_region.current.region} ${local.account_id} ${aws_ecr_repository.this.id} ${aws_ecr_repository.this.repository_url} ${var.architecture} ${path.module}"
   }
-
-  triggers = {
-    always = timestamp()
-  }
 }
 
 data "aws_iam_policy_document" "logs" {
