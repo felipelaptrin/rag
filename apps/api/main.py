@@ -81,7 +81,7 @@ def health() -> HealthResponse:
     return HealthResponse(ok=True, service="rag-api")
 
 
-@app.post("/ask/stream")
+@app.post("/ask")
 def ask_stream(payload: AskRequest):
     rag_service = app.state.rag_service
     logger = logging.getLogger(__name__)
