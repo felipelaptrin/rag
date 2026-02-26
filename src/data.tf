@@ -24,7 +24,7 @@ data "aws_ami" "ubuntu_latest" {
 }
 
 data "aws_ssm_parameter" "ecs_ami_arm64" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/arm64/recommended/image_id"
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id"
 }
 
 data "aws_subnet" "qdrant_host" {
