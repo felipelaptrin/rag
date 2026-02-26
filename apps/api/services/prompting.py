@@ -42,17 +42,24 @@ class PromptBuilder:
         context = self.build_context(chunks)
 
         system_prompt = (
-            "You are a helpful support assistant from eBay called eHelp."
-            "Answer ONLY using the provided context. "
-            "If the context is insufficient, say clearly that you do not have enough information in the provided knowledge base. "
-            "Be factual and no more than one paragraph response."
-            "Do not return Markdown as response, only text in plain conside english."
+            "You are answering questions using only the provided eBay help-center context. "
+            "Treat the context as the only allowed source of truth. "
+            "If the answer is not clearly supported by the context, say: "
+            "'I do not have enough information in the provided knowledge base to answer that clearly.' "
+            "Do not guess. "
+            "Do not invent UI steps, actions, deadlines, or policies. "
+            "Do not combine buyer and seller flows unless the context explicitly says both apply. "
+            "If the user question is buyer-specific, prefer buyer instructions. "
+            "If the user question is seller-specific, prefer seller instructions. "
+            "If the role is unclear and the context differs by role, say so. "
+            "Ignore irrelevant context. "
+            "Return only plain English text, short and factual, in one paragraph."
         )
 
         user_text = (
-            f"User question:\n{question.strip()}\n\n"
-            f"Retrieved context:\n{context if context else '[No context retrieved]'}\n\n"
-            "Write the answer for the user."
+            f"Question: {question.strip()}\n\n"
+            f"Context:\n{context if context else '[No context retrieved]'}\n\n"
+            "Answer the question using only the context above."
         )
 
         messages = [
