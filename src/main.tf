@@ -978,3 +978,253 @@ resource "aws_api_gateway_stage" "api" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   stage_name    = "api"
 }
+######################################################################################
+############################# AWS MANAGED RAG ########################################
+######################################################################################
+
+#################
+### OPENSEARCH SERVERLESS (VECTOR SEARCH)
+#################
+resource "aws_opensearchserverless_security_policy" "kb_encryption" {
+  name = "${local.prefix}-kb-encryption"
+  type = "encryption"
+  policy = jsonencode({
+    Rules = [
+      {
+        Resource     = ["collection/${local.prefix}-kb"]
+        ResourceType = "collection"
+      }
+    ]
+    AWSOwnedKey = true
+  })
+}
+
+resource "aws_opensearchserverless_security_policy" "kb_network" {
+  name = "${local.prefix}-kb-network"
+  type = "network"
+  policy = jsonencode([
+    {
+      Description = "Public access for Knowledge Base collection"
+      Rules = [
+        {
+          ResourceType = "collection"
+          Resource     = ["collection/${local.prefix}-kb"]
+        },
+        {
+          ResourceType = "dashboard"
+          Resource     = ["collection/${local.prefix}-kb"]
+        }
+      ]
+      AllowFromPublic = true
+    }
+  ])
+}
+
+resource "aws_opensearchserverless_access_policy" "kb_data" {
+  name = "${local.prefix}-kb-data"
+  type = "data"
+  policy = jsonencode([
+    {
+      Description = "Bedrock Knowledge Base data access"
+      Principal   = concat([aws_iam_role.bedrock_kb.arn, var.github_iam_role], var.kb_data_access_roles)
+      Rules = [
+        {
+          ResourceType = "collection"
+          Resource     = ["collection/${local.prefix}-kb"]
+          Permission   = ["aoss:DescribeCollectionItems", "aoss:CreateCollectionItems", "aoss:UpdateCollectionItems", "aoss:DeleteCollectionItems"]
+        },
+        {
+          ResourceType = "index"
+          Resource     = ["index/${local.prefix}-kb/*"]
+          Permission   = ["aoss:DescribeIndex", "aoss:ReadDocument", "aoss:WriteDocument", "aoss:CreateIndex", "aoss:DeleteIndex", "aoss:UpdateIndex"]
+        },
+        {
+          ResourceType = "model"
+          Resource     = ["model/${local.prefix}-kb/*"]
+          Permission   = ["aoss:CreateMLResource"]
+        }
+      ]
+    }
+  ])
+}
+
+resource "aws_opensearchserverless_collection" "kb" {
+  name             = "${local.prefix}-kb"
+  description      = "OpenSearch Serverless collection for Bedrock Knowledge Base"
+  type             = "VECTORSEARCH"
+  standby_replicas = "DISABLED"
+
+  depends_on = [
+    aws_opensearchserverless_security_policy.kb_encryption,
+    aws_opensearchserverless_security_policy.kb_network,
+    aws_opensearchserverless_access_policy.kb_data
+  ]
+}
+
+// Ref: https://github.com/hashicorp/terraform-provider-aws/issues/37729
+resource "opensearch_index" "kb" {
+  name                           = local.vector_index_name
+  number_of_shards               = "2"
+  number_of_replicas             = "0"
+  index_knn                      = true
+  index_knn_algo_param_ef_search = "512"
+  mappings                       = <<-EOF
+    {
+      "properties": {
+        "${local.vector_index_name}-vector": {
+          "type": "knn_vector",
+          "dimension": 1024,
+          "method": {
+            "name": "hnsw",
+            "engine": "faiss",
+            "space_type": "l2",
+            "parameters": {}
+          }
+        },
+        "AMAZON_BEDROCK_METADATA": {
+          "type": "text",
+          "index": false
+        },
+        "AMAZON_BEDROCK_TEXT_CHUNK": {
+          "type": "text"
+        }
+      }
+    }
+  EOF
+  force_destroy                  = true
+  depends_on                     = [aws_opensearchserverless_collection.kb]
+
+  lifecycle {
+    ignore_changes = [
+      number_of_shards,  // Reference: https://repost.aws/questions/QUY5AnoceaTLWbu0XkIfhzcw/is-it-necessary-to-specify-the-number-of-shards-when-creating-an-index-in-an-opensearch-serverless-collection?utm_source=chatgpt.com
+      number_of_replicas // Reference: https://repost.aws/questions/QUY5AnoceaTLWbu0XkIfhzcw/is-it-necessary-to-specify-the-number-of-shards-when-creating-an-index-in-an-opensearch-serverless-collection?utm_source=chatgpt.comf
+    ]
+  }
+}
+
+#################
+### BEDROCK KNOWLEDGE BASE IAM
+#################
+data "aws_iam_policy_document" "bedrock_kb_assume" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["bedrock.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:bedrock:${var.aws_region}:${local.account_id}:knowledge-base/*"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "bedrock_kb" {
+  statement {
+    sid    = "OpenSearchServerlessAccess"
+    effect = "Allow"
+    actions = [
+      "aoss:APIAccessAll"
+    ]
+    resources = [aws_opensearchserverless_collection.kb.arn]
+  }
+  statement {
+    sid    = "BedrockInvokeModel"
+    effect = "Allow"
+    actions = [
+      "bedrock:InvokeModel"
+    ]
+    resources = ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.embedding_model_id}"]
+  }
+  statement {
+    sid    = "MarketplaceInvokeModel"
+    effect = "Allow"
+    actions = [
+      "aws-marketplace:ViewSubscriptions",
+      "aws-marketplace:Subscribe"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role" "bedrock_kb" {
+  name               = "${local.prefix}-bedrock-kb"
+  assume_role_policy = data.aws_iam_policy_document.bedrock_kb_assume.json
+}
+
+resource "aws_iam_policy" "bedrock_kb" {
+  name   = "${local.prefix}-bedrock-kb"
+  policy = data.aws_iam_policy_document.bedrock_kb.json
+}
+
+resource "aws_iam_role_policy_attachment" "bedrock_kb" {
+  role       = aws_iam_role.bedrock_kb.name
+  policy_arn = aws_iam_policy.bedrock_kb.arn
+}
+
+# #################
+# ### BEDROCK KNOWLEDGE BASE
+# #################
+resource "aws_bedrockagent_knowledge_base" "this" {
+  name     = local.prefix
+  role_arn = aws_iam_role.bedrock_kb.arn
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.embedding_model_id}"
+    }
+  }
+  storage_configuration {
+    type = "OPENSEARCH_SERVERLESS"
+    opensearch_serverless_configuration {
+      collection_arn    = aws_opensearchserverless_collection.kb.arn
+      vector_index_name = local.vector_index_name
+      field_mapping {
+        metadata_field = "AMAZON_BEDROCK_METADATA"
+        text_field     = "AMAZON_BEDROCK_TEXT_CHUNK"
+        vector_field   = "${local.vector_index_name}-vector"
+      }
+    }
+  }
+}
+
+resource "aws_bedrockagent_data_source" "web_crawler" {
+  for_each = {
+    for idx, urls in local.kb_web_crawler_url_chunks :
+    idx => urls
+  }
+
+  name              = "knowledge-base-urls-${each.key + 1}"
+  knowledge_base_id = aws_bedrockagent_knowledge_base.this.id
+
+  data_source_configuration {
+    type = "WEB"
+
+    web_configuration {
+      crawler_configuration {
+        crawler_limits {
+          max_pages  = 2500
+          rate_limit = 300
+        }
+      }
+
+      source_configuration {
+        url_configuration {
+          dynamic "seed_urls" {
+            for_each = each.value
+            content {
+              url = seed_urls.value
+            }
+          }
+        }
+      }
+    }
+  }
+}
