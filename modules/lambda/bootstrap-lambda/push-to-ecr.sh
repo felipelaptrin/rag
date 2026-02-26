@@ -5,7 +5,7 @@ AWS_ACCOUNT_ID=$2
 ECR_NAME=$3
 ECR_URI=$4
 ARCHITECTURE=$5
-PATH=$6
+PATH_SCRIPT=$6
 
 TAG="bootstrap"
 
@@ -20,9 +20,9 @@ fi
 
 aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 docker build -t bootstrap-lambda:placeholder \
-    -f $PATH/bootstrap-lambda/Dockerfile \
+    -f $PATH_SCRIPT/bootstrap-lambda/Dockerfile \
     --platform=$ARCHITECTURE \
-    $PATH/bootstrap-lambda
+    $PATH_SCRIPT/bootstrap-lambda
 docker tag bootstrap-lambda:placeholder $ECR_URI:$TAG
 docker push $ECR_URI:$TAG
 sleep 5
