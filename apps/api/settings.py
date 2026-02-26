@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
+from secret import get_api_key
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ def load_settings() -> Settings:
         qdrant_collection=_required("QDRANT_COLLECTION"),
         bedrock_embedding_model_id=_required("BEDROCK_EMBEDDING_MODEL_ID"),
         bedrock_generation_model_id=_required("BEDROCK_GENERATION_MODEL_ID"),
-        qdrant_api_key=os.getenv("QDRANT_API_KEY"),
+        qdrant_api_key=get_api_key(os.getenv("QDRANT_API_KEY")),
         top_k_default=int(os.getenv("TOP_K_DEFAULT", "5")),
         top_k_max=int(os.getenv("TOP_K_MAX", "10")),
         max_context_chunks=int(os.getenv("MAX_CONTEXT_CHUNKS", "5")),
