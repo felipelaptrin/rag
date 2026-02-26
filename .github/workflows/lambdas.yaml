@@ -69,6 +69,23 @@ jobs:
           ecr_name: knowledge-base-dev-embedding
           build_args: APP_DIR=embedding
 
+  lambda-api-ci:
+    if: github.event_name == 'pull_request' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: api
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "false"
+          working_directory: "apps/api"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-api
+          ecr_name: knowledge-base-dev-api
+
   lambda-pdf-to-text-cd:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -122,3 +139,20 @@ jobs:
           lambda_name: knowledge-base-dev-embedding
           ecr_name: knowledge-base-dev-embedding
           build_args: APP_DIR=embedding
+
+  lambda-api-cd:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: api
+        uses: ./.github/actions/build-and-push
+        with:
+          deploy: "true"
+          working_directory: "apps/api"
+          aws_region: us-east-1
+          aws_role_arn: ${{ env.DEV_TERRAFORM_ROLE }}
+          lambda_name: knowledge-base-dev-api
+          ecr_name: knowledge-base-dev-api
