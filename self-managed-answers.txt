@@ -1,0 +1,89 @@
+==================================================
+Q: my package didn't arrive, what do i do?
+
+A: If your item hasn't arrived, check your order confirmation email for the expected delivery date and shipping address, and select “View order details” to see the latest tracking updates. If the estimated delivery date has passed, report that your item hasn't arrived by contacting the seller through your order confirmation email, selecting “I haven't received my item yet,” and choosing “No, I want to contact the seller.” You have up to 30 calendar days from the estimated delivery date to do so, and the seller should respond within 3 business days with an update, replacement, or refund.
+
+==================================================
+Q: i want to return an item and get my money back, how?
+
+A: To request a return, open a return request by selecting the item you want to send back from your recent purchases or using the button in My eBay. After you've opened a return request, you can check the status at any time by selecting the button below. If the buyer pays the return shipping costs and the return request complies with the seller's return policy or the eBay Money Back Guarantee, the return may be automatically accepted.
+
+==================================================
+Q: who pays return shipping?
+
+A: Who pays for return shipping depends on the reason for the return and your return policy. The seller pays if they offer a free returns policy or if the item is damaged, faulty, or doesn't match the listing description, while the buyer pays if they are returning the item because they changed their mind, and your return policy states that buyers are responsible for return shipping.
+
+==================================================
+Q: item arrived broken, do i open return or something else?
+
+A: If an item arrives broken, you should go to your Purchases and select “See request details” to close your request. Select a reason for closing the return and add details if you want to, then confirm.
+
+==================================================
+Q: seller is ignoring my return request, what now
+
+A: If you haven't responded to a return request, eBay may issue a refund to the buyer and seek reimbursement from you. You can start resolving a return request by opening your Returns dashboard and selecting “View return details,” and your options for responding include refunding the buyer or asking eBay to step in.
+
+==================================================
+Q: how long do i have to wait before ebay helps me
+
+A: You have up to 21 business days after eBay opens a case to ask for help if you and the buyer haven't resolved the issue within 3 business days. eBay will aim to provide an answer within 48 hours, though it may take longer if more information is needed.
+
+==================================================
+Q: how do i check the status of my case/request
+
+A: If you've requested a return or reported that you didn't receive your order, you can check the status at any time.
+
+==================================================
+Q: i bought as guest, can i still ask for a refund?
+
+A: Yes, you can still ask for a refund if you bought as a guest, as guest purchases are protected by eBay's Money Back Guarantee if all eligibility requirements are met. You can start a return or report a missing item from your guest order confirmation email, and you can ask eBay to step in and help through your order details.
+
+==================================================
+Q: i bought as guest and item never arrived, what should i do
+
+A: First, check the delivery information in your order confirmation email to see the expected delivery date and shipping address. If the expected delivery date has passed, let the seller know that the item hasn't arrived. If you can't resolve the issue with the seller, you can ask eBay for help.
+
+==================================================
+Q: i'm a seller, buyer says item not received, what should i do first
+
+A: First, check your tracking information to see if the item was delivered. If the estimated delivery date has passed and the buyer has opened an “item not received” request, sign in to your account and resolve the request through eBay's help center. You have three business days to resolve the issue, and after that, either you or the buyer can ask eBay to step in to help.
+
+==================================================
+Q: how do i refund a buyer
+
+A: To issue a refund to a buyer, go to the case in your Returns dashboard (my.ebay.com/ws/eBayISAPI.dll?MyEbayBeta&CurrentPage=MyeBayNextReturn) and choose “Refund buyer.” You must issue the refund within 2 business days of receiving the item, and refunds are processed through the buyer's original payment method, taking 3 to 5 business days to appear.
+
+==================================================
+Q: buyer opened a return, how do i respond him
+
+A: To accept a return, go to your Returns dashboard, select “View return details” beside the item, select “Accept the return,” and then “Continue.” If you haven't responded to the return request, eBay may issue a refund to the buyer and seek reimbursement from you without requiring the buyer to return the item.
+
+==================================================
+Q: what's the difference between return request and payment dispute
+
+A: A payment dispute is when a buyer requests their money back by reporting an issue to their bank, credit card provider, or payment institution, while a return request involves a buyer reporting an issue with an item and seeking to have it returned. If you disagree with a payment dispute, you can challenge it by providing supporting evidence through Seller Hub.
+
+==================================================
+Q: buyer opened a payment dispute, can i still refund normally
+
+A: If your buyer opens a payment dispute, you can generally choose to accept the dispute or challenge it with supporting evidence. If you accept the dispute, eBay may challenge it on your behalf, and you won't be charged a dispute fee.
+
+==================================================
+Q: can i appeal an ebay case decision as a buyer
+
+A: You can appeal an eBay case decision as a buyer by providing new information within 30 calendar days of the case closing.
+
+==================================================
+Q: can i appeal an ebay case decision as a seller
+
+A: You can appeal the outcome of a case as a seller by providing new information within 30 calendar days of the case being closed.
+
+==================================================
+Q: how do i set my return policy as a seller
+
+A: To save time and give buyers a quick resolution, you can set up rules to manage some types of returns automatically. You can set up rules to automatically accept returns or send immediate refunds, and the order of your return rules list determines the priority certain rules take over others.
+
+==================================================
+Q: buyer changed mind, do i have to pay return shipping
+
+A: Who pays for return shipping if the buyer changed their mind depends on your return policy. If you stated you offer free returns, you have to pay; otherwise, you can ask the buyer to cover the cost.
