@@ -52,7 +52,7 @@ No modules.
 | <a name="input_name"></a> [name](#input\_name) | Name of the Lambda Function | `string` | n/a | yes |
 | <a name="input_subnet_ids"></a> [subnet\_ids](#input\_subnet\_ids) | List of subnet IDs to deploy the Lambda into. Required when vpc\_id is provided. | `list(string)` | `[]` | no |
 | <a name="input_timeout"></a> [timeout](#input\_timeout) | Amount of time your Lambda Function has to run in seconds | `number` | `60` | no |
-| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | The VPC ID to deploy the Lambda into. When provided, enables VPC mode and creates a security group. | `string` | `null` | no |
+| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | The VPC ID to deploy the Lambda into. When provided, enables VPC mode and creates a security group. | `string` | `""` | no |
 
 ## Outputs
 

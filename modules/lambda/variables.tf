@@ -52,7 +52,7 @@ variable "json_policy" {
 variable "vpc_id" {
   description = "The VPC ID to deploy the Lambda into. When provided, enables VPC mode and creates a security group."
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "subnet_ids" {
