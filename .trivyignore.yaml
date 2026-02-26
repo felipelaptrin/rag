@@ -30,3 +30,4 @@ misconfigurations:
     statement: Specify at least 1 USER command in Dockerfile with non-root user as argument. We can ignore this based on the following AWS reference https://docs.aws.amazon.com/lambda/latest/dg/images-create.html
     paths:
       - apps/Dockerfile
+      - apps/api/Dockerfile
