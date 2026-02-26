@@ -5,7 +5,7 @@ import boto3
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from qdrant_client import QdrantClient
-from schemas import AskRequest, HealthResponse
+from schemas import AskRequest
 from services.embeddings import EmbeddingService
 from services.generation import GenerationService
 from services.prompting import PromptBuilder
@@ -74,11 +74,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
-
-
-@app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(ok=True, service="rag-api")
 
 
 @app.post("/ask")

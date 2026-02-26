@@ -11,8 +11,3 @@ class AskRequest(BaseModel):
         if not v:
             raise ValueError("question must not be blank")
         return v
-
-
-class HealthResponse(BaseModel):
-    ok: bool
-    service: str
