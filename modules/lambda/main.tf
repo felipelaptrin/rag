@@ -11,7 +11,7 @@ resource "null_resource" "bootstrap" {
   depends_on = [aws_ecr_repository.this]
 
   provisioner "local-exec" {
-    command = "sh ${path.module}/bootstrap-lambda/push-to-ecr.sh ${data.aws_region.current.region} ${local.account_id} ${aws_ecr_repository.this.id} ${aws_ecr_repository.this.repository_url} ${var.architecture}"
+    command = "sh ${path.module}/bootstrap-lambda/push-to-ecr.sh ${data.aws_region.current.region} ${local.account_id} ${aws_ecr_repository.this.id} ${aws_ecr_repository.this.repository_url} ${var.architecture} ${path.module}"
   }
 }
 
